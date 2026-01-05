@@ -72,6 +72,14 @@ from scMut.test import run_pipe
 
 `MutTracer` integrates inferred lineage information with gene expression to predict temporal gene expression patterns along lineages. 
 
+### 4) tree_util: Lineage tree utilities
+
+Provides utility functions for lineage tree processing and format interoperability:
+
+- Converts between `Newick` string format and `CassiopeiaTree` object
+- Fixes common tree format issues to improve stability
+- Other utilities: e.g. extracts tree linkage matrix
+
 
 ## 2. Environment Installation
 
