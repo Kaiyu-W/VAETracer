@@ -32,23 +32,26 @@ python GetAF.py
 
 ### 2) scMut: Mutation Matrix Decomposition
 
-The `scMut` module decomposes the 2D mutation profile matrix into two biologically interpretable components:
+The `scMut` module decomposes the 2D mutation profile **M** into two biologically interpretable components:
 
-- N: Cell generational index (lineage time)
-- P: Site-specific mutation probability (mutation bias)
+- **N**: Cell generation index (lineage time)
+- **P**: Site-specific mutation rate (mutation bias)
 
-The `scMut` module consists of three submodules:
+It consists of three submodules:
 
 - `NMF`: Non-negative Matrix Factorization, for initial and best decomposition
 - `VAE`: Variational Autoencoder, with two operational modes:
-  - mode1-`np`: 
-    - Infers latent representation Z via encoder
-    - Encodes Z -> N through a dedicated encoder
-    - Learns P as a site-specific parameter layer
-    - Reconstructs M using an explicit function: M = f(N, P)
-  - mode2-`xhat`: 
-    - Uses classical encoder-latent-decoder architecture
-    - Reconstructs mutation matrix directly: X ≈ Xhat
+  <pre>
+  ● mode1-`np`: 
+      ▪ Infers latent representation Z via encoder:        Z = encoder1(M)
+      ▪ Encodes Z → N through a learned transformation:    N = encoder2(Z)
+      ▪ Learns P as site-specific parameters:              P = P_site
+      ▪ Reconstructs M by combining N and P:               Mhat = f(N, P)
+
+  ● mode2-`xhat`: 
+      ▪ Uses standard encoder-latent-decoder structure:    Z = encoder(M)
+      ▪ Reconstructs mutation matrix directly:             Mhat = decoder(Z)
+  </pre>
 - `FT`: Fine-tuning module, for post-hoc refinement of N and P estimates
 
 #### Python API
@@ -74,18 +77,18 @@ from scMut.test import run_pipe
 
 Due to dependency conflicts among packages, we provide ``env_split.sh`` to automatically set up three isolated Conda environments:
 
-1) VAETracer_vcf
+1) **VAETracer_vcf**
     - For upstream data processing
     - Dependencies:
 `sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR` 
     - Recommended version consistency with scripts for compatibility
 
-2) VAETracer_vae
+2) **VAETracer_vae**
     - For scMut modeling and decomposition
     - Dependencies:
 `pytorch`, `pyarrow`, `scipy`, `scikit-learn`, `umap-learn,` `scanpy`
 
-3) VAETracer_sc
+3) **VAETracer_sc**
     - For downstream analysis with scRNA-seq data
     - Dependencies:
 `scanpy` (for single-cell analysis), `cassiopeia` (for lineage tree construction), and others
