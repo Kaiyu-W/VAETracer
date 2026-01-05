@@ -3,6 +3,7 @@ Mutation-Guided Lineage Reconstruction and Generational State Inference from scR
 
 VAETracer is a computational framework that integrates somatic mutation profiles with single-cell RNA equencing (scRNA-seq) data to reconstruct lineage relationships and infer generational dynamics. It consists of three modular components: `preprocess`, `scMut`, and `MutTracer`, implementing end-to-end analysis from raw sequencing data to lineage-aware expression modeling.
 
+
 ## 1. Components of VAETracer
 
 ### 1) preprocess: Data Preprocessing Pipeline
@@ -32,8 +33,23 @@ python GetAF.py
 ### 2) scMut: Mutation Matrix Decomposition
 
 The `scMut` module decomposes the 2D mutation profile matrix into two biologically interpretable components:
+
 - N: Cell generational index (lineage time)
 - P: Site-specific mutation probability (mutation bias)
+
+The `scMut` module consists of three submodules:
+
+- `NMF`: Non-negative Matrix Factorization, for initial and best decomposition
+- `VAE`: Variational Autoencoder, with two operational modes:
+  - mode1-`np`: 
+    - Infers latent representation Z via encoder
+    - Encodes Z -> N through a dedicated encoder
+    - Learns P as a site-specific parameter layer
+    - Reconstructs M using an explicit function: M = f(N, P)
+  - mode2-`xhat`: 
+    - Uses classical encoder-latent-decoder architecture
+    - Reconstructs mutation matrix directly: X ≈ Xhat
+- `FT`: Fine-tuning module, for post-hoc refinement of N and P estimates
 
 #### Python API
 ```python
@@ -70,9 +86,10 @@ Due to dependency conflicts among packages, we provide ``env_split.sh`` to autom
 `pytorch`, `pyarrow`, `scipy`, `scikit-learn`, `umap-learn,` `scanpy`
 
 3) VAETracer_sc
-    - For downstream analysis with scRNA.seq data
+    - For downstream analysis with scRNA-seq data
     - Dependencies:
 `scanpy` (for single-cell analysis), `cassiopeia` (for lineage tree construction), and others
+
 
 ## 3. Notes and Recommendations
 
