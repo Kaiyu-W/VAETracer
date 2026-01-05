@@ -101,6 +101,7 @@ Due to dependency conflicts among packages, we provide ``env_split.sh`` to autom
     - Dependencies:
 `scanpy` (for single-cell analysis), `cassiopeia` (for lineage tree construction), and others
 
+Alternatively, users may manually create the environments and configure the corresponding dependencies as needed.
 
 ## 3. Notes and Recommendations
 
