@@ -88,7 +88,7 @@ Due to dependency conflicts among packages, we provide ``env_split.sh`` to autom
 1) **VAETracer_vcf**
     - For upstream data processing
     - Dependencies:
-`sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR` 
+`sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR`, `pysam`, `pyarrow` 
     - Recommended version consistency with scripts for compatibility
 
 2) **VAETracer_vae**
