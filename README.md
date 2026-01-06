@@ -44,7 +44,7 @@ It consists of three submodules:
   <pre>
   ● mode1-`np`: 
       ▪ Infers latent representation Z via encoder:        Z = encoder1(M)
-      ▪ Encodes Z → N through a learned transformation:    N = encoder2(Z)
+      ▪ Encodes Z -> N through a learned transformation:   N = encoder2(Z)
       ▪ Learns P as site-specific parameters:              P = P_site
       ▪ Reconstructs M by combining N and P:               Mhat = f(N, P)
 
