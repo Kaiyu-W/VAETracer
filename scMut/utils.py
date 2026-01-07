@@ -31,7 +31,25 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f'(Import) Use {DEVICE} as default device!')
 
 
-def _input_tensor(x, device=None, dtype=None):
+def _input_tensor(
+    x: Union[np.ndarray, torch.Tensor, List],
+    device: Optional[torch.device] = None,
+    dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """
+    Convert input data to a detached tensor on specified device and dtype.
+
+    If input is already a tensor, clones and detaches it. Otherwise converts from array/list.
+    
+    Args:
+        x: Input data (array, list, or tensor).
+        device: Target device ('cpu' or 'cuda'). Uses current if None.
+        dtype: Target data type (e.g., torch.float32).
+
+    Returns:
+        A detached, cloned tensor on the specified device and dtype.
+    """
+
     if isinstance(x, torch.Tensor):
         x = x.clone().detach()
         if device is not None:
@@ -45,11 +63,36 @@ def _input_tensor(x, device=None, dtype=None):
             raise ValueError(f"Cannot input as torch.Tensor: {e}")
     return x
 
-def _softplus_inverse(x):
+def _softplus_inverse(x: torch.Tensor) -> torch.Tensor:
+    """
+    Compute the inverse of the softplus function in a numerically stable way.
+
+    Given values that were transformed by softplus (a smooth function mapping real numbers to positive values),
+    this function recovers the original input values before transformation.
+
+    Useful for decoding outputs in probabilistic models where parameters are constrained to be positive.
+
+    Args:
+        x: A tensor of values that have been passed through a softplus operation, with values greater than zero.
+
+    Returns:
+        A tensor of the same shape, containing the recovered original values (which can be any real number).
+    """
+
     logit = x + torch.log1p(torch.exp(-x)) # torch.log(torch.exp(y) - 1)
     return logit
 
-def set_seed(seed, device=DEVICE):
+def set_seed(seed: int, device: Union[str, torch.device] = DEVICE) -> None:
+    """
+    Set random seeds for reproducibility across libraries.
+
+    Applies seed to Python's random, NumPy, and PyTorch (with CUDA determinism if available).
+
+    Args:
+        seed: Integer seed value.
+        device: Device context; used to determine whether to enable CUDA determinism.
+    """
+
     random.seed(seed)
     np.random.seed(seed)
     if (
@@ -63,13 +106,22 @@ def set_seed(seed, device=DEVICE):
     else:
         torch.manual_seed(seed)
 
-def visualize_loss(losses, yscale=None, save=None, show=True):
+def visualize_loss(
+    losses: List[float],
+    yscale: Optional[str] = None,
+    save: Optional[str] = None,
+    show: bool = True,
+) -> None:
     """
-    Visualize training loss curve.
-    
+    Visualize training loss curve over epochs.
+
+    Plots scalar loss values with optional logarithmic scaling.
+
     Args:
-        losses (list): List of loss values during training
-        yscale (str, optional): Scale of y-axis ('linear', 'log', etc.). Defaults to None
+        losses: Sequence of loss values per epoch.
+        yscale: Y-axis scale ('linear', 'log', etc.). Default: None.
+        save: File path to save figure. If None, not saved.
+        show: Whether to display plot immediately.
     """
 
     plt.figure(figsize=(5,4))
@@ -85,7 +137,26 @@ def visualize_loss(losses, yscale=None, save=None, show=True):
     if show:
         plt.show()
 
-def visualize_loss_k(loss_dict, k_optimal=None, smooth=False, save=None, show=True):
+def visualize_loss_k(
+    loss_dict: Dict[int, float],
+    k_optimal: Optional[int] = None,
+    smooth: bool = False,
+    save: Optional[str] = None,
+    show: bool = True,
+) -> None:
+    """
+    Plot model selection criterion (loss vs K) for hyperparameter tuning.
+
+    Used to visualize elbow or minimum point in K-selection procedures.
+
+    Args:
+        loss_dict: Mapping from K (number of components) to corresponding loss.
+        k_optimal: Highlight optimal K with a red dot.
+        smooth: If True, connects points with line; otherwise scatter only.
+        save: Path to save figure.
+        show: Whether to render plot.
+    """
+
     keys = sorted(loss_dict.keys())
     values = [loss_dict[k] for k in keys]
 
@@ -106,20 +177,24 @@ def visualize_loss_k(loss_dict, k_optimal=None, smooth=False, save=None, show=Tr
     if show:
         plt.show()
 
-def plot_metrics(model, yscale=None, nrow=1, save=None, show=True):
+def plot_metrics(
+    model: "AutoEncoderModel",
+    yscale: Optional[str] = None,
+    nrow: int = 1,
+    save: Optional[str] = None,
+    show: bool = True,
+) -> None:
     """
-    Plot training and validation metrics over time.
-    
+    Plot training and validation metrics recorded during model fitting.
+
+    Supports plotting multiple metrics (e.g., total_loss, recon_loss, kl_loss) in subplots.
+
     Args:
-        model (AutoEncoderModel): Trained model with recorded metrics
-        yscale (str, optional): Scale for y-axis (e.g., 'log')
-        nrow (int, optional): Number of rows for subplots
-    
-    Notes:
-        Plots three metrics if available:
-        - total_loss
-        - reconstruction_loss
-        - kl_loss (for VAE only)
+        model: Trained model with `.train_metrics` and optionally `.valid_metrics`.
+        yscale: Scale for y-axis (e.g., 'log').
+        nrow: Number of subplot rows.
+        save: Figure save path.
+        show: Whether to display the plot.
     """
 
     # Get available metrics from the first training record
@@ -163,20 +238,38 @@ def plot_metrics(model, yscale=None, nrow=1, save=None, show=True):
     if show:
         plt.show()
 
-def plot_latent_space(model, data=None, labels=None, reduction='tsne', save=None, show=True, return_z=False, use_cpu=False, **embed_kwargs):
+def plot_latent_space(
+    model: "AutoEncoderModel",
+    data: Optional[Union[np.ndarray, torch.Tensor]] = None,
+    labels: Optional[np.ndarray] = None,
+    reduction: Literal["tsne", "umap"] = "tsne",
+    save: Optional[str] = None,
+    show: bool = True,
+    return_z: bool = False,
+    use_cpu: bool = False,
+    **embed_kwargs,
+) -> Optional[np.ndarray]:
     """
-    Visualize the latent space using dimensionality reduction if needed.
-    
+    Visualize model's latent space using t-SNE or UMAP dimensionality reduction.
+
+    Projects high-dimensional latent vectors into 2D for visualization.
+    Points can be colored by labels if provided.
+
     Args:
-        model (AutoEncoderModel): Trained model
-        data (numpy.ndarray): Input data to encode. Defaults to None and use the latent space of trained model
-        labels (numpy.ndarray, optional): Labels for coloring points. Defaults to None
-        reduction (str): t-SNE or UMAP embedding method
-    
-    Notes:
-        - If latent dimension > 2, uses t-SNE for visualization
-        - If labels provided, points are colored according to their labels
+        model (AutoEncoderModel): Trained model with encoder and latent representation.
+        data: Optional input data to encode; if None, uses stored Z.
+        labels: Optional labels for coloring (categorical or continuous).
+        reduction: Dimensionality reduction method ('tsne' or 'umap').
+        save: Save path for figure.
+        show: Whether to display plot.
+        return_z: If True, returns the 2D embedding coordinates.
+        use_cpu: If True, performs encoding on CPU (useful for large models).
+        **embed_kwargs: Additional arguments passed to the embedding algorithm.
+
+    Returns:
+        If return_z is True, returns the 2D coordinates (n_samples, 2). Otherwise None.
     """
+
     # define embedding method
     _embed_kwargs = {}
     if reduction == 'umap':
@@ -237,7 +330,28 @@ def plot_latent_space(model, data=None, labels=None, reduction='tsne', save=None
     if return_z:
         return z
 
-def plot_regplot(data, x, y, lowess=False, save=None, show=True):
+def plot_regplot(
+    data,
+    x: str,
+    y: str,
+    lowess: bool = False,
+    save: Optional[str] = None,
+    show: bool = True,
+) -> None:
+    """
+    Create a regression plot (scatter + fit line) using Seaborn.
+
+    Useful for visualizing relationships between two variables.
+
+    Args:
+        data: DataFrame or dict-like object with column access.
+        x: Column name for x-axis variable.
+        y: Column name for y-axis variable.
+        lowess: If True, uses non-parametric LOWESS smoothing instead of linear fit.
+        save: Figure save path.
+        show: Whether to display plot.
+    """
+    
     plt.figure(figsize=(5,4))
     sns.regplot(
         x=data[x],y=data[y],lowess=lowess,

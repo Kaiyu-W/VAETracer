@@ -19,6 +19,11 @@ from .log import logger
 
 
 class DummyPbar:
+    """
+    A dummy progress bar that mimics tqdm interface but does nothing.
+    
+    Used when tqdm is disabled to avoid conditional logic in training loop.
+    """
     def update(self, n):
         pass
 
@@ -27,10 +32,37 @@ class DummyPbar:
 
 
 class Encoder(nn.Module):
+    """
+    Neural network encoder module for AE and VAE models.
+
+    Maps input data to latent representation(s). For VAE, outputs both mean (mu)
+    and log-variance (logvar); for AE, outputs a deterministic latent vector (z).
+    """
+
     def __init__(
-        self, input_dim, hidden_dims, z_dim, model_type='VAE', activation='relu', # encoder should have any activation
-        dropout_rate=0.1, use_batch_norm=False, use_layer_norm=True
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        model_type: Literal["AE", "VAE"] = 'VAE',
+        activation: Literal["relu", "leakyrelu", "gelu", "none"] = 'relu',
+        dropout_rate: float = 0.1,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = True,
     ):
+        """
+        Initialize the encoder.
+
+        Args:
+            input_dim: Dimension of input features.
+            hidden_dims: Sizes of hidden layers (list of integers).
+            z_dim: Dimension of latent space.
+            model_type: Whether this encoder is for 'AE' or 'VAE'.
+            activation: Activation function to use ('relu', 'leakyrelu', 'gelu', or 'none').
+            dropout_rate: Dropout probability between layers (>0 to enable).
+            use_batch_norm: Whether to apply BatchNorm1d after linear layer.
+            use_layer_norm: Whether to apply LayerNorm after normalization.
+        """
         super().__init__()
 
         # Choose activation function
@@ -68,22 +100,52 @@ class Encoder(nn.Module):
         else:
             raise ValueError("Invalid model type. Choose 'AE' or 'VAE'.")
 
-    def forward_vae(self, x):
+     def forward_vae(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass for VAE: returns mu and logvar.
+        """
         h = self.hidden_layers(x)
         mu = self.fc_mu(h)
         logvar = self.fc_logvar(h)
         return mu, logvar
 
-    def forward_ae(self, x):
+    def forward_ae(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for AE: returns deterministic latent z.
+        """
         h = self.hidden_layers(x)
         z = self.fc_z(h)
         return z
 
 class Decoder(nn.Module):
+    """
+    Neural network decoder module.
+
+    Reconstructs input data from latent representation.
+    """
+
     def __init__(
-        self, z_dim, hidden_dims, output_dim, activation='none', # decoder should have no activation
-        dropout_rate=0, use_batch_norm=False, use_layer_norm=True
+        self,
+        z_dim: int,
+        hidden_dims: List[int],
+        output_dim: int,
+        activation: Literal["relu", "leakyrelu", "gelu", "none"] = 'none',
+        dropout_rate: float = 0,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = True,
     ):
+        """
+        Initialize the decoder.
+
+        Args:
+            z_dim: Dimension of latent input.
+            hidden_dims: Sizes of hidden layers (in reverse order of encoder).
+            output_dim: Dimension of reconstructed output.
+            activation: Activation function between layers ('none' recommended).
+            dropout_rate: Dropout probability (>0 to enable).
+            use_batch_norm: Whether to apply BatchNorm1d.
+            use_layer_norm: Whether to apply LayerNorm.
+        """
         super().__init__()
 
         # Choose activation function
@@ -112,17 +174,58 @@ class Decoder(nn.Module):
         self.hidden_layers = nn.Sequential(*layers)
         self.output_layer = nn.Linear(hidden_dims[-1], output_dim)
 
-    def forward(self, z):
+     def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass: reconstruct input from latent code.
+
+        Args:
+            z: Latent tensor of shape (batch_size, z_dim)
+
+        Returns:
+            Reconstructed tensor of shape (batch_size, output_dim)
+        """
         h = self.hidden_layers(z)
         x_hat = self.output_layer(h)
         return x_hat
 
 class AE(nn.Module):
+    """
+    Autoencoder (AE) model combining Encoder and Decoder.
+
+    Does not include probabilistic modeling; uses deterministic encoding.
+    """
+
     def __init__(
-        self, input_dim, hidden_dims, z_dim, activation='relu', 
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
     ):
+        """
+        Initialize the AE model.
+
+        Args:
+            input_dim: Dimension of input features.
+            hidden_dims: Sizes of hidden layers (e.g., [256, 128]).
+            z_dim: Dimension of latent space.
+            activation: Activation function for hidden layers of Encoder ('relu', 'leakyrelu', 'gelu').
+            use_batch_norm: Where to apply BatchNorm1d:
+                - "none": no batch norm
+                - "encoder": only in encoder
+                - "decoder": only in decoder
+                - "both": both encoder and decoder
+            use_layer_norm: Where to apply LayerNorm:
+                - "none": no layer norm
+                - "encoder": only in encoder
+                - "decoder": only in decoder
+                - "both": both encoder and decoder
+
+            Note: When both are enabled, normalization is applied as:
+                  Linear -> BatchNorm1d -> LayerNorm -> Activation
+        """
         super().__init__()
 
         self.use_batch_norm_encoder = use_batch_norm == "encoder" or use_batch_norm == "both"
@@ -143,27 +246,71 @@ class AE(nn.Module):
             use_layer_norm=self.use_layer_norm_decoder
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Forward pass of AE.
+
+        Args:
+            x: Input tensor of shape (batch_size, input_dim)
+
+        Returns:
+            tuple: (x_input, x_recon, z_latent)
+        """
         z = self.encoder(x)
         x_hat = F.softplus(self.decoder(z)) # Xhat should be non-negative
         return x, x_hat, z
 
     @torch.no_grad()
     def freeze_all(self):
+        """Freeze all parameters (disable gradient computation)."""
         for param in self.parameters():
             param.requires_grad = False
 
     @torch.no_grad()
     def unfreeze_all(self):
+        """Unfreeze all parameters (enable gradient computation)."""
         for param in self.parameters():
             param.requires_grad = True
 
 class VAE(nn.Module):
+    """
+    Variational Autoencoder (VAE) model with reparameterization trick.
+
+    Encodes input into distribution parameters (mu, logvar), samples latent z,
+    then decodes back to reconstruction.
+    """
+
     def __init__(
-        self, input_dim, hidden_dims, z_dim, activation='relu', 
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
     ):
+        """
+        Initialize the VAE model.
+
+        Args:
+            input_dim: Dimension of input features.
+            hidden_dims: Sizes of hidden layers (e.g., [256, 128]).
+            z_dim: Dimension of latent space.
+            activation: Activation function for hidden layers of Encoder ('relu', 'leakyrelu', 'gelu').
+            use_batch_norm: Where to apply BatchNorm1d:
+                - "none": no batch norm
+                - "encoder": only in encoder
+                - "decoder": only in decoder
+                - "both": both encoder and decoder
+            use_layer_norm: Where to apply LayerNorm:
+                - "none": no layer norm
+                - "encoder": only in encoder
+                - "decoder": only in decoder
+                - "both": both encoder and decoder
+
+            Note: When both are enabled, normalization is applied as:
+                  Linear -> BatchNorm1d -> LayerNorm -> Activation
+        """
         super().__init__()
 
         self.use_batch_norm_encoder = use_batch_norm == "encoder" or use_batch_norm == "both"
@@ -184,7 +331,20 @@ class VAE(nn.Module):
             use_layer_norm=self.use_layer_norm_decoder
         )
 
-    def reparameterize(self, mu, logvar):
+     def reparameterize(
+        self, mu: torch.Tensor, logvar: torch.Tensor
+    ) -> Tuple[Optional[Normal], torch.Tensor]:
+        """
+        Reparameterization trick: sample z ~ N(mu, std).
+
+        Args:
+            mu: Mean tensor of shape (batch_size, z_dim)
+            logvar: Log-variance tensor of shape (batch_size, z_dim)
+
+        Returns:
+            tuple: (distribution object, sampled z)
+                   If numerical issues occur, dist may be None.
+        """
         std = F.softplus(0.5 * logvar) # torch.exp(0.5 * logvar)
 
         if torch.isnan(mu).any() or torch.isnan(std).any() or torch.isinf(mu).any() or torch.isinf(std).any():
@@ -197,7 +357,20 @@ class VAE(nn.Module):
         z = dist.rsample()
         return dist, z
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> Tuple[
+        torch.Tensor, torch.Tensor,  # x, x_hat
+        torch.Tensor, torch.Tensor,  # mu, logvar
+        Optional[Normal], torch.Tensor  # qz, z
+    ]:
+        """
+        Forward pass of VAE.
+
+        Args:
+            x: Input tensor of shape (batch_size, input_dim)
+
+        Returns:
+            tuple: (x_input, x_recon, mu, logvar, qz_dist, z_sampled)
+        """
         mu, logvar = self.encoder(x)
         qz, z = self.reparameterize(mu, logvar)
         x_hat = F.softplus(self.decoder(z))  # Xhat should be non-negative
@@ -205,11 +378,13 @@ class VAE(nn.Module):
 
     @torch.no_grad()
     def freeze_all(self):
+        """Freeze all parameters."""
         for param in self.parameters():
             param.requires_grad = False
 
     @torch.no_grad()
     def unfreeze_all(self):
+        """Unfreeze all parameters."""
         for param in self.parameters():
             param.requires_grad = True
 
@@ -217,48 +392,71 @@ class VAE(nn.Module):
 class AutoEncoderModel:
     """
     A unified implementation of Autoencoder (AE) and Variational Autoencoder (VAE).
-    
-    Args:
-        input_dim (int): Dimension of input features
-        hidden_dims (list): List of hidden dimensions for encoder/decoder
-        z_dim (int): Dimension of latent space
-        num_epochs (int): Number of training epochs
-        lr (float, optional): Learning rate. Defaults to 1e-3
-        beta (float, optional): Weight of KL divergence for VAE. Defaults to 1
-        model_type (str, optional): Type of model ('AE' or 'VAE'). Defaults to 'VAE'
-        device (str, optional): Device to use. Defaults to DEVICE
-        seed (int, optional): Random seed. Defaults to 42
-        activation (str, optional): Activation function. Defaults to 'relu'
-        use_batch_norm
-            Specifies where to use :class:`~torch.nn.BatchNorm1d` in the model. One of the following:
 
-            * ``"none"``: don't use batch norm in either encoder(s) or decoder.
-            * ``"encoder"``: use batch norm only in the encoder(s).
-            * ``"decoder"``: use batch norm only in the decoder.
-            * ``"both"``: use batch norm in both encoder(s) and decoder.
+    Supports configurable architecture, training loop with early stopping,
+    and evaluation metrics logging.
 
-            Note: if ``use_layer_norm`` is also specified, both will be applied (first
-            :class:`~torch.nn.BatchNorm1d`, then :class:`~torch.nn.LayerNorm`).
-        use_layer_norm
-            Specifies where to use :class:`~torch.nn.LayerNorm` in the model. One of the following:
-
-            * ``"none"``: don't use layer norm in either encoder(s) or decoder.
-            * ``"encoder"``: use layer norm only in the encoder(s).
-            * ``"decoder"``: use layer norm only in the decoder.
-            * ``"both"``: use layer norm in both encoder(s) and decoder.
-
-            Note: if ``use_batch_norm`` is also specified, both will be applied (first
-            :class:`~torch.nn.BatchNorm1d`, then :class:`~torch.nn.LayerNorm`).
+    Example:
+        model = AutoEncoderModel(
+            input_dim=500,
+            hidden_dims=[256, 128],
+            z_dim=10,
+            num_epochs=200,
+            model_type='VAE'
+        )
+        model.load_data(X_train, batch_size=256)
+        losses = model.train()
     """
 
     def __init__(
-        self, input_dim, hidden_dims, z_dim, num_epochs, lr=1e-3, beta=1, seed=42, eps=1e-8,
-        model_type='VAE', device=DEVICE, dtype=torch.float32,
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        num_epochs: int,
+        lr: float = 1e-3,
+        beta: float = 1.0,
+        seed: int = 42,
+        eps: float = 1e-8,
+        model_type: Literal["AE", "VAE"] = 'VAE',
+        device: Union[str, torch.device] = DEVICE,
+        dtype: torch.dtype = torch.float32,
         activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
         **kwargs
     ):
+        """
+        Initialize the autoencoder model.
+
+        Args:
+            input_dim: Number of input features.
+            hidden_dims: List of sizes for hidden layers.
+            z_dim: Dimensionality of latent space.
+            num_epochs: Maximum number of training epochs.
+            lr: Learning rate for Adam optimizer.
+            beta: Weight for KL divergence term in VAE loss (ignored in AE).
+            seed: Random seed for reproducibility.
+            eps: Small epsilon value for numerical stability.
+            model_type: Either 'AE' (deterministic) or 'VAE' (probabilistic).
+            device: Device to run computations on ('cpu' or 'cuda').
+            dtype: Data type for tensors (e.g., torch.float32).
+            activation: Activation function to use in hidden layers.
+            use_batch_norm (Literal): Where to apply BatchNorm1d in the model. One of:
+                - "none": don't use batch norm in either encoder or decoder.
+                - "encoder": use batch norm only in the encoder.
+                - "decoder": use batch norm only in the decoder.
+                - "both": use batch norm in both encoder and decoder.
+            use_layer_norm (Literal): Where to apply LayerNorm in the model. One of:
+                - "none": don't use layer norm in either encoder or decoder.
+                - "encoder": use layer norm only in the encoder.
+                - "decoder": use layer norm only in the decoder.
+                - "both": use layer norm in both encoder and decoder.
+              Note: If both use_batch_norm and use_layer_norm are enabled, they are applied in order:
+                    first BatchNorm1d, then LayerNorm.
+            **kwargs: Additional keyword arguments (not used currently).
+        """
+
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
         self.z_dim = z_dim
@@ -315,10 +513,10 @@ class AutoEncoderModel:
         self.initialize_weights(self.model)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
-    def _validate_inputs(self):
+    def _validate_inputs(self) -> None:
         """
         Validate model inputs and configurations.
-        
+
         Raises:
             ValueError: For invalid input dimensions or configurations
         """
@@ -341,26 +539,33 @@ class AutoEncoderModel:
         if self.lr <= 0:
             raise ValueError("learning rate must be positive!")
 
-    def load_data(self, X, batch_size, num_workers=0, pin_memory=False, dtype=None, shuffle=True):
+    def load_data(
+        self,
+        X: np.ndarray,
+        batch_size: int,
+        num_workers: int = 0,
+        pin_memory: bool = False,
+        dtype: Optional[torch.dtype] = None,
+        shuffle: bool = True,
+    ) -> None:
         """
         Load training data into DataLoader.
-        
+
         Args:
-            X (numpy.ndarray): Input data
-            batch_size (int): Size of each training batch
-            num_workers (int, optional): Number of workers for DataLoader. Defaults to 0
-            pin_memory (bool): Whether to pin memory in CPU. Defaults to False
-            dtype (torch.dtype, optional): Data type of tensors. Defaults to self.dtype
-            shuffle (bool, optional): Whether to shuffle the data. Defaults to True
+            X: Input data matrix of shape (n_samples, input_dim).
+            batch_size: Size of each training batch.
+            num_workers: Number of subprocesses for data loading.
+            pin_memory: Whether to pin memory for faster GPU transfer.
+            dtype: Desired tensor data type. Uses model's default if None.
+            shuffle: Whether to shuffle data during training.
         
         Notes:
             - pin_memory=True is recommended when using GPU
             - Requires more CPU memory but speeds up GPU transfer
 
         Raises:
-            ValueError: If input dimension doesn't match model's input_dim
-        """
-
+            ValueError: If input dimension doesn't match model's input_dim.
+        """ 
         if X.shape[1] != self.input_dim:
             raise ValueError(f"Input data must have {self.input_dim} features, but got {X.shape[1]} features.")
         self.batch_size = batch_size
@@ -405,15 +610,15 @@ class AutoEncoderModel:
         else:
             self.data_loader_order = self.data_loader
 
-    def load_valid_data(self, Xvalid):
+    def load_valid_data(self, Xvalid: np.ndarray) -> None:
         """
         Load validation data into DataLoader.
-        
+
         Args:
-            Xvalid (numpy.ndarray): Validation data
+            Xvalid: Validation data matrix of shape (n_valid_samples, input_dim)
 
         Raises:
-            ValueError: If input dimension doesn't match model's input_dim
+            ValueError: If input dimension doesn't match model's input_dim.
         """
 
         if Xvalid.shape[1] != self.input_dim:
@@ -423,9 +628,24 @@ class AutoEncoderModel:
             self.Xvalid, self.batch_size, shuffle=False
         )
 
-    def _create_dataloader(self, data, batch_size, shuffle, sample_related_vars=None):
+    def _create_dataloader(
+        self,
+        data: torch.Tensor,
+        batch_size: int,
+        shuffle: bool,
+        sample_related_vars: Optional[torch.Tensor] = None,
+    ) -> DataLoader:
         """
         Helper method to create DataLoader with given batch size.
+
+        Args:
+            data: Tensor dataset.
+            batch_size: Batch size.
+            shuffle: Whether to shuffle.
+            sample_related_vars: Optional auxiliary variables.
+
+        Returns:
+            Configured DataLoader instance.
         """
         self.batch_size = batch_size
         _data = (data, ) if sample_related_vars is None else (data, sample_related_vars)
@@ -437,7 +657,10 @@ class AutoEncoderModel:
             pin_memory=self.pin_memory
         )
 
-    def _clear(self):
+    def _clear(self) -> None:
+        """
+        Clear memory cache (CPU and GPU).
+        """
         import gc
         gc.collect()
 
@@ -446,35 +669,44 @@ class AutoEncoderModel:
             
         gc.collect()
 
-    def clear_cuda(self):
+    def clear_cuda(self) -> None:
+        """Switch model between CPU and CUDA to refresh memory."""
         self.to_cpu()
         self.to_cuda()
 
-    def to_cpu(self):
+    def to_cpu(self) -> None:
+        """Move model to CPU."""
         if self.device.type != 'cpu':
             self.device = torch.device('cpu')
             self.model = self.model.to(self.device)
             self._clear()
 
-    def to_cuda(self):
+    def to_cuda(self) -> None:
+        """Move model to CUDA."""
         if self.device.type != 'cuda':
             self.device = torch.device('cuda')
             self.model = self.model.to(self.device)
             self._clear()
 
-    def _handle_memory_error(self, batch_size, min_batch=10):
+    def _handle_memory_error(
+        self,
+        batch_size: int,
+        min_batch: int = 10
+    ) -> int:
         """
-        Intelligently handle memory errors for both CPU and GPU.
-        
+        Handle out-of-memory errors by reducing batch size.
+
+        Uses binary search to find largest working batch size.
+
         Args:
-            batch_size (int): Current batch size
-            min_batch (int): Minimum acceptable batch size
-            
+            batch_size: Current attempted batch size.
+            min_batch: Minimum acceptable batch size.
+
         Returns:
-            int: Optimal batch size that fits in memory
-            
+            Optimal batch size that fits in memory.
+
         Raises:
-            RuntimeError: If even minimum batch size doesn't fit in memory
+            RuntimeError: If no valid batch size can be found.
         """
         # Clear memory based on device type
         self._clear()
@@ -515,12 +747,12 @@ class AutoEncoderModel:
         logger.info(f"Found optimal batch size: {optimal_batch} on {self.device.type}")
         return optimal_batch
 
-    def save_model(self, path):
+    def save_model(self, path: str) -> None:
         """
         Save model state and configuration to file.
 
         Args:
-            path (str): Path to save the model
+            path: File path to save checkpoint.
         """
 
         torch.save({
@@ -535,13 +767,13 @@ class AutoEncoderModel:
             }
         }, path)
 
-    def load_model(self, path, map_location=None):
+    def load_model(self, path: str, map_location: Optional[torch.device] = None) -> None:
         """
         Load model state and configuration from file.
 
         Args:
-            path (str): Path to load the model from
-            map_location (torch.device, optional): Device to map model to. Defaults to None
+            path: Path to saved model file.
+            map_location: Device to load onto (e.g., 'cpu', 'cuda'). Uses current if None.
         """
 
         if map_location is None:
@@ -555,7 +787,15 @@ class AutoEncoderModel:
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(self.device)
 
-    def initialize_weights(self, model):
+    def initialize_weights(self, model: nn.Module) -> None:
+        """
+        Initialize weights using Kaiming/Xavier initialization.
+
+        Encoder layers use Kaiming normal; decoder use Xavier normal.
+
+        Args:
+            model: The neural network module to initialize.
+        """
         for m in model.modules():
             if isinstance(m, nn.Linear):
                 n_in = m.in_features
@@ -568,17 +808,64 @@ class AutoEncoderModel:
                     nn.init.zeros_(m.bias)
 
     @torch.jit.script
-    def _kl_loss(mu, logvar):
+    def _kl_loss(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+        """
+        Compute KL divergence between N(mu, sigma^2) and N(0, 1).
+
+        Scripted for performance.
+
+        Args:
+            mu: Mean tensor.
+            logvar: Log-variance tensor.
+
+        Returns:
+            Scalar KL loss summed over batch and latent dimensions.
+        """
         return -0.5 * torch.sum(
             1 + logvar - mu.pow(2) - logvar.exp(),
             dim=-1
         ).sum()
     
-    def _kl_loss_by_qz(self, z, qz):
+    def _kl_loss_by_qz(self, z: torch.Tensor, qz: Normal) -> torch.Tensor:
+        """
+        Alternative KL computation using distribution objects.
+
+        Args:
+            z: Sampled latent vector.
+            qz: Approximate posterior distribution.
+
+        Returns:
+            KL divergence sum.
+        """
         pz = Normal(torch.zeros_like(z), torch.ones_like(z))
         return kl_divergence(qz, pz).sum(-1).sum()
 
-    def loss_vae(self, x, x_hat, mu, logvar, qz, z, *args, **kwargs): # qz, z
+    def loss_vae(
+        self,
+        x: torch.Tensor,
+        x_hat: torch.Tensor,
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
+        qz: Optional[Normal],
+        z: torch.Tensor,
+        *args, **kwargs
+    ) -> torch.Tensor:
+        """
+        Compute VAE loss: MSE + beta * KL.
+
+        Also updates internal metrics dictionary.
+
+        Args:
+            x: Original input.
+            x_hat: Reconstructed output.
+            mu: Latent mean.
+            logvar: Latent log-variance.
+            qz: Posterior distribution (for monitoring).
+            z: Sampled latent code.
+
+        Returns:
+            Total loss scalar.
+        """
         batch_size = x.size(0)
         MSE = F.mse_loss(x_hat, x, reduction='sum') / batch_size
         KLD = self._kl_loss(mu, logvar) / batch_size
@@ -593,7 +880,22 @@ class AutoEncoderModel:
 
         return MSE + self.beta * KLD
 
-    def loss_ae(self, x, x_hat, *args, **kwargs): # z
+    def loss_ae(
+        self,
+        x: torch.Tensor,
+        x_hat: torch.Tensor,
+        *args, **kwargs
+    ) -> torch.Tensor:
+        """
+        Compute AE loss: only MSE reconstruction loss.
+
+        Args:
+            x: Original input.
+            x_hat: Reconstructed output.
+
+        Returns:
+            Reconstruction loss scalar.
+        """
         MSE = F.mse_loss(x_hat, x, reduction='sum')
 
         # Store individual losses for monitoring
@@ -604,7 +906,13 @@ class AutoEncoderModel:
 
         return MSE
 
-    def _get_reconstructions(self):
+    def _get_reconstructions(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Encode all data and get reconstructions without shuffling.
+
+        Returns:
+            tuple: (Z_latent, Xhat_reconstructed) arrays of shape (n_samples, z_dim) and (n_samples, input_dim)
+        """
         self.model.eval()
         z_list, xhat_list = [], []
         
@@ -621,14 +929,13 @@ class AutoEncoderModel:
 
         return Z, Xhat
 
-    def _train_epoch(self):
+    def _train_epoch(self) -> Dict[str, float]:
         """
         Train model for one epoch.
 
         Returns:
-            dict: Dictionary containing average metrics for the epoch
+            Dictionary of average metric values for this epoch.
         """
-
         self.model.train()
         total_metrics = defaultdict(float)
         n_samples = 0
@@ -665,12 +972,12 @@ class AutoEncoderModel:
         self.train_metrics.append(avg_metrics)
         return avg_metrics
 
-    def _validate(self):
+    def _validate(self) -> Dict[str, float]:
         """
         Validate model on validation set.
         
         Returns:
-            dict: Dictionary containing average metrics for validation
+            Dictionary containing average metrics for validation
         """
         self.model.eval()
         total_metrics = defaultdict(float)
@@ -706,10 +1013,33 @@ class AutoEncoderModel:
         self.valid_metrics.append(avg_metrics)
         return avg_metrics
 
-    def _check_tensor(self, tensor):
+    def _check_tensor(self, tensor: torch.Tensor) -> bool:
+        """
+        Check if tensor contains NaN or Inf values.
+
+        Args:
+            tensor: Input tensor.
+
+        Returns:
+            True if any NaN or Inf present.
+        """
         return torch.isnan(tensor).any() or torch.isinf(tensor).any()
 
-    def _check_nan(self, optimizer, loss=None):
+    def _check_nan(
+        self,
+        optimizer: torch.optim.Optimizer,
+        loss: Optional[Union[float, torch.Tensor]] = None
+    ) -> bool:
+        """
+        Check for NaN/Inf in loss, parameters, or gradients.
+
+        Args:
+            optimizer: The optimizer instance used in training.
+            loss: Optional scalar loss value (Python float or tensor).
+
+        Returns:
+            True if any problematic values (NaN/Inf) detected in loss, params, or grads.
+        """
         # check loss
         if loss is not None:
             if isinstance(loss, torch.Tensor):
@@ -731,17 +1061,26 @@ class AutoEncoderModel:
 
         return False
 
-    def train(self, use_tqdm=False, patience=45, min_delta=None, verbose=True, **kwargs):
+    def train(
+        self,
+        use_tqdm: bool = False,
+        patience: int = 45,
+        min_delta: Optional[float] = None,
+        verbose: bool = True,
+        **kwargs
+    ) -> List[float]:
         """
         Train the model with early stopping.
 
         Args:
-            use_tqdm (bool, optional): Whether to use tqdm progress bar. Defaults to False
-            patience (int, optional): Early stopping patience. Defaults to 45
-            min_delta (float, optional): Minimum change in loss for early stopping. Defaults to 1e-4
-        
+            use_tqdm: Whether to show progress bar.
+            patience: Number of epochs with no improvement before stopping.
+            min_delta: Minimum change in loss to count as improvement.
+            verbose: Whether to log training progress.
+            **kwargs: Ignored.
+
         Returns:
-            list: List of losses during training
+            List of total loss values per epoch.
         """
         if self.loss is None:
             raise ValueError("Loss function wasn't defined!")

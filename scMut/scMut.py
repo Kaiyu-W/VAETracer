@@ -25,17 +25,28 @@ from .log import logger
 
 
 # R -> n 'x' p
-def computeR_by_np(n, p, eps=1e-8):
+def computeR_by_np(
+    n: torch.Tensor,
+    p: torch.Tensor,
+    eps: float = 1e-8
+) -> torch.Tensor:
     """
     Efficient and numerically stable computation of R = 1 - (1 - p)^n.
-    
-    Parameters:
-    - n: (batch, 1) or scalar, number of trials
-    - p: (feature) or scalar, probability of success in each trial
-    - eps: Small value to avoid numerical instability
-    
+
+    Computes the probability of at least one mutation occurring across n generations,
+    given site-specific mutation rate p. Uses multiple approximation strategies to
+    avoid numerical overflow/underflow in extreme cases.
+
+    This implements the core cumulative mutation model used throughout scMut.
+
+    Args:
+        n: Tensor of shape (batch_size, 1) or scalar representing generation count.
+        p: Tensor of shape (feature_dim,) or scalar representing per-site mutation rate.
+        eps: Small value for numerical stability.
+
     Returns:
-    - r: Probability of at least one success in n trials
+        r: Probability tensor of same shape as broadcasted (n, p), clamped in [0,1].
+           Computed as r = 1 - (1-p)^n using exact or approximate methods depending on regime.
     """
 
     log_safe_1mp = torch.log1p(-p + eps)          # log(1-p)
@@ -89,12 +100,57 @@ def computeR_by_np(n, p, eps=1e-8):
 
 # NMF
 def decompose_R_to_np(
-    R, n=None, p=None, only_train_p=False, miss_value=3, 
-    lr=1e-3, patience=45, min_delta=0, eps=1e-8, 
-    max_epoch=None, logging_interval=100, verbose=True,
-    device=DEVICE, dtype=torch.float64, use_tqdm=False,
-    batch_size=None, seed=None
-):
+    R: np.ndarray,
+    n: Optional[np.ndarray] = None,
+    p: Optional[np.ndarray] = None,
+    only_train_p: bool = False,
+    miss_value: int = 3,
+    lr: float = 1e-3,
+    patience: int = 45,
+    min_delta: float = 0,
+    eps: float = 1e-8,
+    max_epoch: Optional[int] = None,
+    logging_interval: int = 100,
+    verbose: bool = True,
+    device: Union[str, torch.device] = DEVICE,
+    dtype: torch.dtype = torch.float64,
+    use_tqdm: bool = False,
+    batch_size: Optional[int] = None,
+    seed: Optional[int] = None
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[float]]:
+    """
+    Decompose observed mutation matrix R into latent variables n (generation) and p (mutation rate).
+
+    Solves an optimization problem to find optimal n and p such that R ≈ 1 - (1 - p)^n,
+    using binary cross-entropy loss with masked missing values.
+
+    Supports both full joint optimization and partial update (only train p or only train n).
+
+    Args:
+        R: Observed mutation matrix of shape (n_samples, n_sites).
+        n: Initial guess for cell-wise generation vector (n_cells,). If None, initialized automatically.
+        p: Initial guess for site-wise mutation rate vector (n_sites,). If None, initialized to zeros.
+        only_train_p: If True, only optimize p while keeping n fixed.
+        miss_value: Value indicating missing/masked entries in R.
+        lr: Learning rate for Adam optimizer.
+        patience: Early stopping patience.
+        min_delta: Minimum improvement threshold.
+        eps: Numerical stability epsilon.
+        max_epoch: Maximum number of epochs; if None, runs until convergence.
+        logging_interval: Interval for progress logging.
+        verbose: Whether to print logs.
+        device: Device to run on ('cpu' or 'cuda').
+        dtype: Data type for computation.
+        use_tqdm: Use tqdm progress bar.
+        batch_size: Batch size for training; if None, uses full-batch.
+        seed: Random seed.
+
+    Returns:
+        tuple: (best_n, best_p, losses)
+            - best_n: Estimated n vector (None if not optimized)
+            - best_p: Estimated p vector (None if not optimized)
+            - losses: Training loss history
+    """
     if batch_size is not None:
         assert isinstance(batch_size, int) and batch_size >= 100, \
             "batch_size must be None or an integer >= 100!"
@@ -279,7 +335,34 @@ def decompose_R_to_np(
 
 
 # bayesian R
-def compute_posterior(r, r0, r1, p_prior, n=1000, eps=1e-8, mask_value=3):
+def compute_posterior(
+    r: np.ndarray,
+    r0: float,
+    r1: np.ndarray,
+    p_prior: np.ndarray,
+    n: int = 1000,
+    eps: float = 1e-8,
+    mask_value: int = 3
+) -> np.ndarray:
+    """
+    Compute posterior probability of true mutation status using Bayesian inference.
+
+    Updates prior belief about mutation status based on observation and expected rates.
+
+    Used for denoising and imputation of missing values.
+
+    Args:
+        r: Observed mutation frequency matrix.
+        r0: Expected rate under null hypothesis (no mutation).
+        r1: Expected rate under alternative hypothesis (mutation present).
+        p_prior: Prior probability of mutation at each site.
+        n: Number of trials (generations).
+        eps: Small value for numerical stability.
+        mask_value: Indicator for missing data.
+
+    Returns:
+        Posterior probability matrix of mutation presence.
+    """
     r = np.asarray(r)
     r1 = np.asarray(r1)
     p_prior = np.asarray(p_prior)
@@ -307,30 +390,35 @@ def compute_posterior(r, r0, r1, p_prior, n=1000, eps=1e-8, mask_value=3):
 
 # n (float) -> n (int)
 def optimize_integer_scaling(
-    n, max_n, 
-    max_error_ratio=0.1, 
-    tolerance_ratio=0.01, 
-    max_iter=1000, 
-    num_random=50, 
-    seed=42
-):
+    n: np.ndarray,
+    max_n: int,
+    max_error_ratio: float = 0.1,
+    tolerance_ratio: float = 0.01,
+    max_iter: int = 1000,
+    num_random: int = 50,
+    seed: int = 42
+) -> Tuple[np.ndarray, float, Dict[float, float]]:
     """
-    Find the optimal scaling factor k such that:
-    - The rounding error is minimized
-    
-    Parameters:
-        n (numpy array): Input array of real numbers
-        max_n (int): Target maximum value after rounding (used only for initial estimate)
-        tolerance_ratio (float): Relative tolerance for convergence (as a fraction of k_init)
-        max_iter (int): Maximum number of iterations
-        num_random (int): Number of random perturbations per iteration
-        max_error_ratio (float): Relative range for initial search (as a fraction of k_init)
-        seed (int): Random seed for reproducibility (None for random state)
-    
+    Find optimal scaling factor k to convert real-valued generation scores to integers.
+
+    Minimizes rounding error under constraint that maximum scaled value does not exceed max_n.
+
+    Useful for converting continuous N estimates into discrete division counts.
+
+    Args:
+        n: Array of real-valued generation scores.
+        max_n: Target maximum integer value after rounding.
+        max_error_ratio: Search range around initial estimate.
+        tolerance_ratio: Convergence threshold relative to scale.
+        max_iter: Maximum refinement iterations.
+        num_random: Number of random perturbations per step.
+        seed: For reproducible sampling.
+
     Returns:
-        k_optimal (float): Optimal scaling factor
-        n_round_optimal (numpy array): Rounded values of n * k_optimal
-        loss_records (dict): Dictionary recording k and its corresponding rounding error
+        tuple: (n_round_optimal, k_optimal, loss_records)
+            - n_round_optimal: Rounded integer array
+            - k_optimal: Optimal scaling factor
+            - loss_records: History of tested k values and errors
     """
     len_n = len(n)
     
@@ -418,12 +506,39 @@ def optimize_integer_scaling(
 
 class MutDecoder_np(Decoder):
     """
-    decoder for mutation data
+    Decoder specialized for estimating scalar parameters (n or p) from latent space.
+
+    Outputs a single logit value per sample, transformed via softplus (for n) or sigmoid (for p).
+    Used in scMut to predict either:
+        - cellular generation index (n), or
+        - site-specific mutation rate (p)
+    depending on training mode.
     """
     def __init__(
-            self, z_dim, hidden_dims, output_dim=1, activation='none', # decoder should have no activation
-            dropout_rate=0, use_batch_norm=False, use_layer_norm=True
-        ):
+        self,
+        z_dim: int,
+        hidden_dims: List[int],
+        output_dim: int = 1,
+        activation: Literal["none"] = 'none',
+        dropout_rate: float = 0,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = True
+    ):
+        """
+        Initialize the decoder.
+
+        Args:
+            z_dim: Dimension of latent input.
+            hidden_dims: Hidden layer sizes (in reverse order of encoder).
+            output_dim: Must be 1; outputs one parameter per sample.
+            activation: Activation function between layers ('none' recommended).
+            dropout_rate: Dropout probability (>0 enables dropout).
+            use_batch_norm: Whether to apply BatchNorm1d.
+            use_layer_norm: Whether to apply LayerNorm.
+
+        Raises:
+            ValueError: If output_dim != 1.
+        """
         if output_dim != 1:
             raise ValueError("output_dim must be 1")
         super().__init__(
@@ -431,7 +546,18 @@ class MutDecoder_np(Decoder):
             dropout_rate=dropout_rate, use_batch_norm=use_batch_norm, use_layer_norm=use_layer_norm
         )
 
-    def forward(self, z):
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the n/p decoder.
+
+        Args:
+            z: Latent tensor of shape (batch_size, z_dim)
+
+        Returns:
+            np_logit: Logit output of shape (batch_size, 1), representing:
+                      - n_logit = softplus_inverse(n) in normal mode
+                      - p_logit = logit(p) in reverse mode
+        """
         h = self.hidden_layers(z)
         np_logit = self.output_layer(h) 
         # for n: n>0,     n=softplus(logit)
@@ -441,14 +567,59 @@ class MutDecoder_np(Decoder):
 
 class scMut(VAE):
     """
-    Complete scMut model combining encoder and decoder.
+    Complete scMut model combining encoder and decoder for mutation data modeling.
+
+    This model implements two distinct learning strategies based on the `reverse` flag:
+
+    - Normal mode (reverse=False): 
+        The latent variable Z is used to predict cellular generation (N).
+        A fixed learnable parameter p_logit (one per site) stores the base mutation rate.
+        This is the standard configuration for estimating N given known or initialized P.
+
+    - Reverse mode (reverse=True):
+        The latent variable Z is used to predict site-level mutation rates (P).
+        A fixed learnable parameter n_logit (one per cell) stores the base generation count.
+        This enables inference of P when N is assumed or pre-estimated.
+
+    In both modes:
+    - N (cellular generation) is always associated with cells
+    - P (mutation rate) is always associated with sites
+    - The role of Z determines what is learned dynamically from the data
+    - The other quantity (N or P) is stored as a global parameter
+
+    This design allows flexible integration with prior knowledge and multi-stage training.
     """
     def __init__(
-        self, input_dim, hidden_dims, z_dim, activation='relu', 
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
-        reverse=False
+        reverse: bool = False
     ):
+        """
+        Initialize the scMut model.
+
+        Args:
+            input_dim: Number of features (e.g., number of sites in normal mode).
+            hidden_dims: Sizes of hidden layers in encoder/decoder.
+            z_dim: Dimensionality of latent space.
+            activation: Activation function for hidden layers.
+            use_batch_norm: Where to apply BatchNorm1d.
+            use_layer_norm: Where to apply LayerNorm.
+            reverse: Controls the learning target:
+                - If False (default): Z predicts N (generation per cell); p_logit is fixed/global.
+                - If True: Z predicts P (mutation rate per site); n_logit is fixed/global.
+                    
+                     This does NOT swap biological roles:
+                     - N is still the cellular generation count
+                     - P is still the site-specific mutation probability
+                    
+                     Instead, it swaps which quantity is inferred from the latent space (Z),
+                     and which is treated as a shared learnable parameter.
+        """
         super().__init__(
             input_dim=input_dim, hidden_dims=hidden_dims, z_dim=z_dim, activation=activation, 
             use_batch_norm=use_batch_norm,
@@ -471,20 +642,27 @@ class scMut(VAE):
             self.decoder_n = n_or_p
             self.p_logit = nn.Parameter(torch.zeros(input_dim)) # raw mutation rate for each gene(feature)
 
-    def forward(self, x, train_np=False):
+    def forward(
+        self,
+        x: torch.Tensor,
+        train_np: bool = False
+    ) -> Tuple[
+        torch.Tensor,              # x_input
+        torch.Tensor,              # n_logit or p_logit
+        torch.Tensor,              # mu
+        torch.Tensor,              # logvar
+        Optional[torch.distributions.Normal],  # qz
+        torch.Tensor               # z
+    ]:
         """
         Forward pass of the model.
         
         Args:
-            x (torch.Tensor): Input gene expression data
-            
+            x: Input mutation matrix
+            train_np: If True, returns n/p logits instead of reconstructed X
+
         Returns:
-            tuple:
-                - n (torch.Tensor): n for each sample
-                - mu (torch.Tensor): Mean of latent distribution
-                - logvar (torch.Tensor): Log variance of latent distribution
-                - qz (torch.Tensor): Distribution of latent distribution
-                - z (torch.Tensor): Latent space representation
+            tuple: Depending on mode, returns either (x, logits, ...) or (x, xhat, ...)
         """
         mu, logvar = self.encoder(x)
         qz, z = self.reparameterize(mu, logvar)
@@ -501,12 +679,14 @@ class scMut(VAE):
             return x, xhat, mu, logvar, qz, z
 
     @torch.no_grad()
-    def set_mode1(self, mode: Literal["xhat", "np"]):
+    def set_mode1(self, mode: Literal["xhat", "np"]) -> None:
         """
-        Set the model to a specific mode by freezing or unfreezing modules.
-        
+        Set the model to a specific phase in mode1 training sequence.
+
+        Mode1 Sequence: first train np (estimate N/P), then train xhat (reconstruct X).
+
         Args:
-            mode (str): Mode type, either "xhat" or "np".
+            mode: 'xhat' or 'np' — determines which parts to freeze/unfreeze.
                 - "xhat": Freeze encoder / np-related decoders, unfreeze decoder.
                 - "np": Freeze decoder, unfreeze encoder / np-related decoders.
         """
@@ -543,12 +723,14 @@ class scMut(VAE):
             raise ValueError(f"Unsupported mode: {mode}. Choose from 'xhat' or 'np'.")
 
     @torch.no_grad()
-    def set_mode2(self, mode: Literal["xhat", "np"]):
+    def set_mode2(self, mode: Literal["xhat", "np"]) -> None:
         """
-        Set the model to a specific mode by freezing or unfreezing modules.
-        
+        Set the model to a specific phase in mode2 training sequence.
+
+        Mode2 Sequence: first train xhat (reconstruct X), then train np (estimate N/P).
+
         Args:
-            mode (str): Mode type, either "xhat" or "np".
+            mode: 'xhat' or 'np' — determines which parts to freeze/unfreeze.
                 - "xhat": Freeze np-related decoders, unfreeze encoder/decoder.
                 - "np": Freeze encoder/decoder, unfreeze np-related decoders.
         """
@@ -587,67 +769,115 @@ class scMut(VAE):
         
 class MutModel(AutoEncoderModel):
     """
-    Mut model manager for training and inference.
+    Model manager for scMut framework with multi-stage training and post-processing.
+
+    Handles multi-stage training, evaluation, post-processing and denoising
+    for single-cell somatic mutation data analysis.
     
-    This class handles the training and evaluation of the Mut model,
-    specifically designed for single-cell somatic mutation data analysis.
-    
-    Args:
-        input_dim (int): Number of input features (genes)
-        hidden_dims (list): Dimensions of hidden layers
-        z_dim (int): Dimension of the latent space
-        num_epochs (int): Number of training epochs
-        lr (float, optional): Learning rate. Defaults to 1e-3
-        device (str, optional): Device to use. Defaults to DEVICE
-        seed (int, optional): Random seed. Defaults to 42
-        activation (str, optional): Activation function. Defaults to 'relu'
-        use_batch_norm
-            Specifies where to use :class:`~torch.nn.BatchNorm1d` in the model. One of the following:
+    Key Features:
+    - Two-stage training: first estimate N/P, then refine reconstruction
+    - Optional transposition mode to swap sample/feature roles
+    - Bayesian posterior-based denoising
+    - Integer scaling for discrete division counts
 
-            * ``"none"``: don't use batch norm in either encoder(s) or decoder.
-            * ``"encoder"``: use batch norm only in the encoder(s).
-            * ``"decoder"``: use batch norm only in the decoder.
-            * ``"both"``: use batch norm in both encoder(s) and decoder.
-
-            Note: if ``use_layer_norm`` is also specified, both will be applied (first
-            :class:`~torch.nn.BatchNorm1d`, then :class:`~torch.nn.LayerNorm`).
-        use_layer_norm
-            Specifies where to use :class:`~torch.nn.LayerNorm` in the model. One of the following:
-
-            * ``"none"``: don't use layer norm in either encoder(s) or decoder.
-            * ``"encoder"``: use layer norm only in the encoder(s).
-            * ``"decoder"``: use layer norm only in the decoder.
-            * ``"both"``: use layer norm in both encoder(s) and decoder.
-
-            Note: if ``use_batch_norm`` is also specified, both will be applied (first
-            :class:`~torch.nn.BatchNorm1d`, then :class:`~torch.nn.LayerNorm`).
-        miss_value (int, optional): Value for missing data. Defaults to 1
-        wt_value (int, optional): Value for wild-type data. Defaults to 0
-        edit_value (int, optional): Value for edited data. Defaults to 3
-        edit_loss_weight (float, optional): Weight for the edit loss. Defaults to None
-        wt_loss_weight (float, optional): Weight for the wild-type loss. Defaults to None
-        **kwargs: Additional arguments passed to AutoEncoderModel
-        
-    Attributes:
-        model (scVI): The scVI model instance
-        optimizer (torch.optim.Adam): Adam optimizer
-        train_metrics (list): List of training metrics
-        valid_metrics (list): List of validation metrics
-        current_metrics (dict): Current epoch metrics
+    Example:
+        model = MutModel(
+            input_dim=500,
+            hidden_dims=[128],
+            z_dim=20,
+            num_epochs=1000
+        )
+        model.load_data(X, batch_size=256)
+        model.set_mode('np')
+        model.train_np()
     """
     def __init__(
-        self, input_dim, hidden_dims, z_dim, num_epochs, num_epochs_nmf=None,
-        lr=1e-3, beta_kl=0.001, beta_best=0.01, device=DEVICE, dtype=torch.float32,
-        seed=42, eps=1e-10, model_type = None, 
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        num_epochs: int,
+        num_epochs_nmf: Optional[int] = None,
+        lr: float = 1e-3,
+        beta_kl: float = 0.001,
+        beta_best: float = 0.01,
+        device: Union[str, torch.device] = DEVICE,
+        dtype: torch.dtype = torch.float32,
+        seed: int = 42,
+        eps: float = 1e-10,
+        model_type: Optional[str] = None,
         mode_type: Literal["mode1", "mode2", None] = None,
         activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
-        miss_value = 3, wt_value = 0, edit_value = 1,
-        edit_loss_weight = None, wt_loss_weight = None, use_weight=False,
-        train_transpose = False,
+        miss_value: int = 3,
+        wt_value: int = 0,
+        edit_value: int = 1,
+        edit_loss_weight: Optional[float] = None,
+        wt_loss_weight: Optional[float] = None,
+        use_weight: bool = False,
+        train_transpose: bool = False,
         **kwargs
     ):
+        """
+        Initialize the MutModel.
+
+        Args:
+            input_dim: Number of input features (e.g., number of sites).
+            hidden_dims: Dimensions of hidden layers in encoder/decoder.
+            z_dim: Dimensionality of latent space.
+            num_epochs: Maximum number of epochs for main training phase.
+            num_epochs_nmf: Max epochs for NMF refinement step. If None, defaults to num_epochs.
+            lr: Learning rate for Adam optimizer.
+            beta_kl: Weight for KL divergence term during xhat-phase training.
+            beta_best: Weight for consistency loss (aligning N/P estimates across stages).
+            device: Device to run computations on ('cpu' or 'cuda').
+            dtype: Data type for tensors (e.g., torch.float32).
+            seed: Random seed for reproducibility.
+            eps: Small epsilon for numerical stability.
+            model_type: Ignored; forced to None to prevent AE/VAE fallback.
+            mode_type: Training sequence type:
+                - 'mode1': First train np, then train xhat
+                - 'mode2': First train xhat, then train np
+                - None: Use default set by set_mode()
+            activation: Activation function for hidden layers ('relu', 'leakyrelu', 'gelu').
+            use_batch_norm: Apply batch normalization in specified components.
+            use_layer_norm: Apply layer normalization in specified components.
+            miss_value: Value indicating missing/noisy entries in input matrix X.
+            wt_value: Value representing wild-type (no mutation) status.
+            edit_value: Value representing mutated (edited) status.
+            edit_loss_weight: Weight for reconstruction loss on edited positions.
+            wt_loss_weight: Weight for reconstruction loss on wild-type positions.
+            use_weight: If True, applies weighted BCE loss using above weights.
+            train_transpose: Controls both data layout and model learning target:
+
+                - If False (default):
+                    * Input X has shape (n_cells, n_sites)
+                    * Model learns cellular generation (N) from latent space Z
+                    * Site-level mutation rate (P) is globally shared and learned via fixed parameter p_logit
+
+                - If True:
+                    * Input X is transposed to (n_sites, n_cells)
+                    * Model learns site-specific mutation rate (P) from latent space Z
+                    * Cellular generation (N) is globally shared and learned via fixed parameter n_logit
+
+                This flag synchronously controls:
+                  1. Whether the input matrix X is transposed during data loading
+                  2. The mode of the internal scMut model (via reverse=train_transpose)
+
+                It enables dual analysis perspectives:
+                  - Standard view: infer N per cell given P
+                  - Transposed view: infer P per site given N
+
+            **kwargs: Additional arguments passed to parent class AutoEncoderModel.
+
+        Attributes:
+            model (scMut): The core VAE model instance.
+            optimizer1, optimizer2: Optimizers for different phases.
+            N, P: Estimated cellular generations and site-level mutation rates.
+            N_ft, P_ft: Finetuned (integer-scaled) versions of N and P.
+            Xhat_np: Reconstructed mutation matrix from estimated N/P.
+        """
         if model_type is not None:
             logger.info('model_type is forced to be set to None!')
 
@@ -744,12 +974,22 @@ class MutModel(AutoEncoderModel):
         self.current_metrics_np = {}
         # torch.autograd.set_detect_anomaly(True)
 
-    def update_p(self, p_init, requires_grad=True):
+    def update_p(self, p_init: np.ndarray, requires_grad: bool = True) -> None:
         """
-        update the p_logit of self.model
-        
+        Update the fixed mutation rate parameter (p_logit) in the model.
+
+        Used to initialize or refine the site-level mutation rate prior before training.
+        Only available when train_transpose=False.
+
         Args:
-            p_init (torch.Tensor): new initial p, not p_logit!
+            p_init: Array of initial mutation probabilities per site, shape (n_sites,).
+                    Must be in probability space [0,1], not logit space.
+            requires_grad: Whether to enable gradient computation for this parameter during training.
+                          If False, p_logit will remain frozen.
+
+        Raises:
+            AssertionError: If train_transpose=True (p_logit does not exist)
+            AssertionError: If input shape does not match model's p_logit
         """
         assert not self.train_transpose, 'Parameter p_logit only exists in model with train_transpose=False!'
         p_init = _input_tensor(
@@ -764,12 +1004,22 @@ class MutModel(AutoEncoderModel):
 
         self.model.p_logit.requires_grad_(requires_grad)
 
-    def update_n(self, n_init, requires_grad=True):
+    def update_n(self, n_init: np.ndarray, requires_grad: bool = True) -> None:
         """
-        update the n of self.model
-        
+        Update the fixed generation count parameter (n_logit) in the model.
+
+        Used to set a known or estimated cellular generation profile as prior.
+        Only available when train_transpose=True.
+
         Args:
-            n_init (torch.Tensor): new initial n
+            n_init: Array of initial generation counts per cell, shape (n_cells,).
+                    Values should not be in logit space.
+            requires_grad: Whether to enable gradient computation for this parameter during training.
+                          If False, n_logit will remain frozen.
+
+        Raises:
+            AssertionError: If train_transpose=False (n_logit does not exist)
+            AssertionError: If input shape does not match model's n_logit
         """
         assert self.train_transpose, 'Parameter n only exists in model with train_transpose=True!'
         n_init = _input_tensor(
@@ -786,26 +1036,35 @@ class MutModel(AutoEncoderModel):
 
         self.model.n_logit.requires_grad_(requires_grad)
 
-    def load_data(self, X, batch_size, num_workers=0, pin_memory=False, dtype=None, shuffle=True, best_n_or_p=None):
+    def load_data(
+        self,
+        X: np.ndarray,
+        batch_size: int,
+        num_workers: int = 0,
+        pin_memory: bool = False,
+        dtype: Optional[torch.dtype] = None,
+        shuffle: bool = True,
+        best_n_or_p: Optional[np.ndarray] = None
+    ) -> None:
         """
-        Load training data into DataLoader.
-        
+        Load training data into DataLoader with optional transposition and auxiliary variables.
+
+        Handles both standard and transposed modes based on train_transpose flag.
+
         Args:
-            X (numpy.ndarray): Input data
-            batch_size (int): Size of each training batch
-            num_workers (int, optional): Number of workers for DataLoader. Defaults to 0
-            pin_memory (bool): Whether to pin memory in CPU. Defaults to False
-            dtype (torch.dtype, optional): Data type of tensors. Defaults to self.dtype
-            shuffle (bool, optional): Whether to shuffle the data. Defaults to True
-        
-        Notes:
-            - pin_memory=True is recommended when using GPU
-            - Requires more CPU memory but speeds up GPU transfer
+            X: Input mutation matrix of shape (n_cells, n_sites).
+            batch_size: Size of each training batch.
+            num_workers: Number of subprocesses for data loading.
+            pin_memory: Whether to pin CPU memory for faster GPU transfer.
+            dtype: Target tensor data type.
+            shuffle: Whether to shuffle batches during training.
+            best_n_or_p: Optional auxiliary variable used in some training phases:
+                          - When train_transpose=False: provides initial guess for N (cell-wise)
+                          - When train_transpose=True: provides initial guess for P (site-wise)
 
         Raises:
-            ValueError: If input dimension doesn't match model's input_dim
+            ValueError: If input shape doesn't match expected dimensions.
         """
-
         if X.shape[self.feature_dim] != self.input_dim:
             raise ValueError(f"Input data must have {self.input_dim} features, but got {X.shape[self.feature_dim]} features.")
         self.batch_size = batch_size
@@ -855,17 +1114,18 @@ class MutModel(AutoEncoderModel):
         else:
             self.data_loader_order = self.data_loader
 
-    def load_valid_data(self, Xvalid):
+    def load_valid_data(self, Xvalid: np.ndarray) -> None:
         """
         Load validation data into DataLoader.
-        
+
+        Applies same transposition logic as load_data.
+
         Args:
-            Xvalid (numpy.ndarray): Validation data
+            Xvalid: Validation mutation matrix of shape matching training data.
 
         Raises:
-            ValueError: If input dimension doesn't match model's input_dim
+            ValueError: If input shape doesn't match expected dimensions.
         """
-
         if Xvalid.shape[self.feature_dim] != self.input_dim:
             raise ValueError(f"Input data must have {self.input_dim} features, but got {Xvalid.shape[self.feature_dim]} features.")
         self.Xvalid = _input_tensor(Xvalid, dtype=self.dtype)
@@ -875,9 +1135,17 @@ class MutModel(AutoEncoderModel):
             Xvalid_data, self.batch_size, shuffle=False, sample_related_vars=self._best_n_or_p
         )
 
-    def set_mode(self, mode, type = None):
+    def set_mode(self, mode: Literal["xhat", "np"], type: Optional[Literal["mode1", "mode2"]] = None) -> None:
         '''
         Set the operation mode and type for the model.
+        
+        Configures the model state, optimizer, and loss function for either:
+        - Estimating latent parameters (N/P): mode='np'
+        - Reconstructing the mutation matrix: mode='xhat'
+
+        Supports two distinct training sequences:
+        - mode1: first train np, then xhat
+        - mode2: first train xhat, then np
 
         Parameters:
             mode (str): Specifies the current operation mode. Must be one of the following:
@@ -919,7 +1187,22 @@ class MutModel(AutoEncoderModel):
             self.optimizer = self.optimizer2
             self.loss = self._loss_mode2_xhat
 
-    def _reconstruct(self, n_or_p, sample=True):
+    def _reconstruct(self, n_or_p: torch.Tensor, sample: bool = True) -> torch.Tensor:
+        """
+        Generate reconstructed mutation matrix from predicted N or P.
+
+        Computes R = 1 - (1-P)^N using numerically stable operations.
+
+        Args:
+            n_or_p: Predicted latent parameter from decoder:
+                     - If train_transpose=False: softplus(n_logit), shape (batch, 1)
+                     - If train_transpose=True: sigmoid(p_logit), shape (batch, 1)
+            sample: If True, returns binary samples via Bernoulli draw;
+                    if False, returns continuous probabilities.
+
+        Returns:
+            Reconstructed mutation matrix of shape (batch, n_features).
+        """
         if self.train_transpose:
             n = F.softplus(self.n_logit)
             p = torch.sigmoid(n_or_p)
@@ -939,7 +1222,32 @@ class MutModel(AutoEncoderModel):
 
         return r
     
-    def _loss_mode2_xhat(self, x, xhat, mu, logvar, qz, z, *args, **kwargs):
+    def _loss_mode2_xhat(
+        self,
+        x: torch.Tensor,
+        xhat: torch.Tensor,
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
+        qz: Optional[torch.distributions.Normal],
+        z: torch.Tensor,
+        *args, **kwargs
+    ) -> torch.Tensor:
+        """
+        Loss function for xhat phase in mode2 training sequence.
+
+        Combines reconstruction loss (BCE) and KL divergence.
+
+        Args:
+            x: Ground truth mutation matrix.
+            xhat: Reconstructed matrix.
+            mu: Latent mean.
+            logvar: Latent log-variance.
+            qz: Approximate posterior distribution.
+            z: Sampled latent vector.
+
+        Returns:
+            Total loss scalar combining BCE and KL terms.
+        """
         batch_size = x.size(0)
         mask = x != self.miss_value # True for non-missing
 
@@ -959,7 +1267,33 @@ class MutModel(AutoEncoderModel):
 
         return total_loss
 
-    def _loss_mode1_xhat(self, x, xhat, mu, logvar, qz, z, *args, **kwargs):
+    def _loss_mode1_xhat(
+        self,
+        x: torch.Tensor,
+        xhat: torch.Tensor,
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
+        qz: Optional[torch.distributions.Normal],
+        z: torch.Tensor,
+        *args, **kwargs
+    ) -> torch.Tensor:
+        """
+        Compute reconstruction loss for xhat phase in mode1 training sequence.
+
+        In mode1, KL divergence is disabled during the xhat phase to allow flexible reconstruction
+        without strong regularization on latent space structure.
+
+        Args:
+            x: Ground truth mutation matrix.
+            xhat: Reconstructed matrix from decoder.
+            mu: Latent mean vector.
+            logvar: Log-variance of latent distribution.
+            qz: Approximate posterior distribution object.
+            z: Sampled latent vector.
+
+        Returns:
+            Total loss scalar based solely on reconstruction error (BCE).
+        """
         batch_size = x.size(0)
         mask = x != self.miss_value # True for non-missing
 
@@ -975,7 +1309,37 @@ class MutModel(AutoEncoderModel):
 
         return total_loss
     
-    def _loss_mode2_np(self, x, n_or_p, mu, logvar, qz, z, xhat_logit, best_n_or_p=None, *args, **kwargs):
+    def _loss_mode2_np(
+        self,
+        x: torch.Tensor,
+        n_or_p: torch.Tensor,
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
+        qz: Optional[torch.distributions.Normal],
+        z: torch.Tensor,
+        xhat_logit: torch.Tensor,
+        best_n_or_p: Optional[torch.Tensor] = None,
+        *args, **kwargs
+    ) -> torch.Tensor:
+        """
+        Loss function for np estimation phase in mode2 training sequence.
+
+        Focuses on accurate prediction of N or P while keeping other components fixed.
+        Does not include KL term since encoder is frozen.
+
+        Args:
+            x: Input mutation data.
+            n_or_p: Predicted latent parameter (n_logit or p_logit).
+            mu: Latent mean.
+            logvar: Latent log-variance.
+            qz: Posterior distribution.
+            z: Sampled latent code.
+            xhat_logit: Reconstructed values using current N/P estimate.
+            best_n_or_p: Optional reference value for consistency loss (e.g., from previous stage).
+
+        Returns:
+            Total loss combining reconstruction and optional consistency terms.
+        """
         if self.train_transpose:
             p = torch.sigmoid(n_or_p)
             n = F.softplus(self.n_logit)
@@ -1025,7 +1389,37 @@ class MutModel(AutoEncoderModel):
 
         return total_loss
     
-    def _loss_mode1_np(self, x, n_or_p, mu, logvar, qz, z, xhat_logit, best_n_or_p=None, *args, **kwargs):
+    def _loss_mode1_np(
+        self,
+        x: torch.Tensor,
+        n_or_p: torch.Tensor,
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
+        qz: Optional[torch.distributions.Normal],
+        z: torch.Tensor,
+        xhat_logit: torch.Tensor,
+        best_n_or_p: Optional[torch.Tensor] = None,
+        *args, **kwargs
+    ) -> torch.Tensor:
+        """
+        Loss function for np estimation phase in mode1 training sequence.
+
+        Includes both reconstruction loss and KL divergence, as encoder is trainable.
+        Also supports consistency loss against prior estimates.
+
+        Args:
+            x: Input mutation data.
+            n_or_p: Predicted latent parameter (n_logit or p_logit).
+            mu: Latent mean.
+            logvar: Latent log-variance.
+            qz: Approximate posterior distribution.
+            z: Sampled latent vector.
+            xhat_logit: Reconstructed values using current N/P estimate.
+            best_n_or_p: Optional reference value for consistency loss.
+
+        Returns:
+            Total loss scalar including reconstruction, KL, and optional consistency terms.
+        """
         if self.train_transpose:
             p = torch.sigmoid(n_or_p)
             n = F.softplus(self.n_logit)
@@ -1079,12 +1473,14 @@ class MutModel(AutoEncoderModel):
 
         return total_loss
 
-    def _train_epoch_np(self):
+    def _train_epoch_np(self) -> Dict[str, float]:
         """
-        Train the model for one epoch.
-        
+        Train one epoch in np estimation mode.
+
+        Updates either N or P depending on train_transpose setting.
+
         Returns:
-            dict: Average metrics for the epoch
+            Dictionary of average metrics for this epoch (e.g., reconstruction_loss_np, kl_loss).
         """
         self.model.train()
         total_metrics = defaultdict(float)
@@ -1121,12 +1517,14 @@ class MutModel(AutoEncoderModel):
         self.train_metrics_np.append(avg_metrics)
         return avg_metrics
 
-    def _validate_np(self):
+    def _validate_np(self) -> Dict[str, float]:
         """
-        Validate model on validation set.
-        
+        Validate model performance in np estimation mode.
+
+        Evaluates loss on validation set without updating parameters.
+
         Returns:
-            dict: Dictionary containing average metrics for validation
+            Average metric values on validation data.
         """
         self.model.eval()
         total_metrics = defaultdict(float)
@@ -1171,20 +1569,31 @@ class MutModel(AutoEncoderModel):
         self.valid_metrics_np.append(avg_metrics)
         return avg_metrics
 
-    def train_np(self, use_tqdm=False, patience=45, min_delta=None, verbose=True, n_init=None, p_init=None, **kwargs):
+    def train_np(
+        self,
+        use_tqdm: bool = False,
+        patience: int = 45,
+        min_delta: Optional[float] = None,
+        verbose: bool = True,
+        n_init: Optional[np.ndarray] = None,
+        p_init: Optional[np.ndarray] = None,
+        **kwargs
+    ) -> List[float]:
         """
-        Train the model with early stopping.
+        Train the model to estimate latent parameters N or P.
+
+        Executes multi-epoch training with early stopping.
 
         Args:
-            use_tqdm (bool, optional): Whether to use tqdm progress bar. Defaults to False
-            patience (int, optional): Early stopping patience. Defaults to 45
-            min_delta (float, optional): Minimum change in loss for early stopping. Defaults to 1e-4
-            verbose (bool, optional): Defaults to True
-            n_init (optional): Initial n. Defaults to None
-            p_init (optional): Initial p. Defaults to None
-        
+            use_tqdm: Show progress bar.
+            patience: Early stopping epochs.
+            min_delta: Minimum loss improvement threshold.
+            verbose: Print logging messages.
+            n_init: Initial guess for N (used if train_transpose=True).
+            p_init: Initial guess for P (used if train_transpose=False).
+
         Returns:
-            list: List of losses during training
+            List of total loss values per epoch.
         """
         if self.mode_type is None:
             raise ValueError("Please run set_mode() first!")
@@ -1278,7 +1687,19 @@ class MutModel(AutoEncoderModel):
         self._clear()
         return losses
 
-    def _get_reconstructions(self, sample=True): # rewrite for baseVAE
+    def _get_reconstructions(self, sample: bool = True) -> Tuple[np.ndarray, np.ndarray]: # rewrite for baseVAE
+        """
+        Get latent representations and reconstructed mutation matrix after full training.
+
+        Uses trained decoder to generate Xhat from Z. Optionally returns sampled binary outputs.
+
+        Args:
+            sample: If True, applies Bernoulli sampling to reconstruct discrete mutations;
+                    if False, returns continuous probabilities.
+
+        Returns:
+            tuple: (Z_latent, Xhat_reconstructed), each as numpy arrays.
+        """
         if sample:
             set_seed(self.seed)
 
@@ -1305,9 +1726,18 @@ class MutModel(AutoEncoderModel):
 
         return Z, Xhat
 
-    def _get_reconstructions_np(self, sample=True):
+    def _get_reconstructions_np(self, sample: bool = True) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Get latent representations and reconstructions for the full dataset.
+        Get latent representations and reconstructions during np-phase training.
+
+        Computes R = 1 - (1-P)^N using final N/P estimates. Can also return decoded Z.
+
+        Args:
+            sample: Whether to apply Bernoulli sampling to output matrix.
+
+        Returns:
+            tuple: (Z, Xhat) arrays of shape (n_samples, z_dim) and (n_samples, input_dim)
+                   Also sets self.N, self.P, self.Xhat_np attributes.
         """
         if sample:
             set_seed(self.seed)
@@ -1346,23 +1776,54 @@ class MutModel(AutoEncoderModel):
 
         return Z, Xhat
 
-    def _get_n(self, Z):
-        if not self.train_transpose:
-            raise ValueError("Cannot compute n from Z when not train_transpose!")
+    def _get_n(self, Z: np.ndarray) -> np.ndarray:
+        """
+        Extract predicted cellular generation (N) from latent representation Z.
+
+        Only valid when train_transpose=False, where the encoder was trained to predict N
+
+        Args:
+            Z: Latent matrix of shape (n_cells, z_dim)
+
+        Returns:
+            Array of N values (cell-wise generation) of shape (n_cells,)
+
+        Raises:
+            ValueError: If called in transposed mode (train_transpose=True).
+        """
+        if self.train_transpose:
+            raise ValueError("Cannot compute n from Z when train_transpose=True!")
         Z = _input_tensor(Z, device=self.device)
         n_logit = self.model.decoder_n(Z)
         n = F.softplus(n_logit).cpu().detach().numpy().flatten()
         return n
 
-    def finetune_n(self, max_n, use_nmf=False, verbose=True, **optim_kwargs):
-        '''
-        optim_kwargs:
-            max_error_ratio=0.1, 
-            tolerance_ratio=0.01, 
-            max_iter=1000, 
-            num_random=50, 
-            seed=42,
-        '''
+    def finetune_n(
+        self,
+        max_n: int,
+        use_nmf: bool = False,
+        verbose: bool = True,
+        **optim_kwargs
+    ) -> Dict[float, float]:
+        """
+        Finely tune the estimated cellular generation (N) by optimizing scaling factor.
+
+        Converts continuous N scores into integer division counts that minimize rounding error.
+
+        Args:
+            max_n: Target maximum integer value for scaled N.
+            use_nmf: If True, uses N from NMF stage; otherwise uses VAE-estimated N.
+            verbose: Print progress logs.
+            **optim_kwargs: Additional arguments passed to optimize_integer_scaling:
+                max_error_ratio=0.1, 
+                tolerance_ratio=0.01, 
+                max_iter=1000, 
+                num_random=50, 
+                seed=42,
+
+        Returns:
+            Dictionary recording tested scaling factors and their corresponding errors.
+        """
         # get N
         if use_nmf:
             # use self.N_nmf by train()
@@ -1389,16 +1850,37 @@ class MutModel(AutoEncoderModel):
         return loss_records
 
     def finetune_p(
-        self, 
-        use_n=None, 
-        lr=None,
-        patience=45, 
-        min_delta=None, 
-        unlimited_epoch=True, 
-        logging_interval=100, 
-        use_tqdm=True,
-        verbose=True,
-    ):
+        self,
+        use_n: Optional[str] = None,
+        lr: Optional[float] = None,
+        patience: int = 45,
+        min_delta: Optional[float] = None,
+        unlimited_epoch: bool = True,
+        logging_interval: int = 100,
+        use_tqdm: bool = True,
+        verbose: bool = True,
+    ) -> List[float]:
+        """
+        Refine estimated mutation rates (P) using fixed N.
+
+        Runs one-sided NMF optimization where only P is updated.
+
+        Args:
+            use_n: Which N to fix:
+                   - None: use VAE-estimated N
+                   - 'nmf': use N from NMF stage
+                   - 'finetune': use integer-scaled N
+            lr: Learning rate.
+            patience: Early stopping patience.
+            min_delta: Minimum improvement threshold.
+            unlimited_epoch: Run until convergence.
+            logging_interval: Logging frequency.
+            use_tqdm: Show progress bar.
+            verbose: Print logs.
+
+        Returns:
+            Training loss history.
+        """
         lr = self.lr if lr is None else lr
         min_delta = self._eps if min_delta is None else min_delta
         max_epoch = None if unlimited_epoch else self.num_epochs_nmf
@@ -1443,18 +1925,39 @@ class MutModel(AutoEncoderModel):
 
     def train_nmf(
         self,
-        X=None,
-        n_init=None,
-        p_init=None,
-        lr=None,
-        patience=45, 
-        min_delta=None, 
-        unlimited_epoch=True, 
-        logging_interval=100, 
-        use_tqdm=True,
-        verbose=True,
-        use_batch=True
-    ):
+        X: Optional[np.ndarray] = None,
+        n_init: Optional[np.ndarray] = None,
+        p_init: Optional[np.ndarray] = None,
+        lr: Optional[float] = None,
+        patience: int = 45,
+        min_delta: Optional[float] = None,
+        unlimited_epoch: bool = True,
+        logging_interval: int = 100,
+        use_tqdm: bool = True,
+        verbose: bool = True,
+        use_batch: bool = True
+    ) -> List[float]:
+        """
+        Train using pure NMF decomposition without VAE.
+
+        Solves R ≈ 1 - (1-P)^N directly via gradient descent.
+
+        Args:
+            X: Input mutation matrix. If None, uses stored X.
+            n_init: Initial guess for N.
+            p_init: Initial guess for P.
+            lr: Learning rate.
+            patience: Early stopping patience.
+            min_delta: Improvement threshold.
+            unlimited_epoch: Run until convergence.
+            logging_interval: Logging interval.
+            use_tqdm: Show progress bar.
+            verbose: Print logs.
+            use_batch: Use mini-batch training.
+
+        Returns:
+            Loss history.
+        """
         if X is None:
             X = self.X
         else:
@@ -1482,7 +1985,20 @@ class MutModel(AutoEncoderModel):
         self.P_nmf = p
         return losses
 
-    def compute_R(self, n, p, sample=False):
+    def compute_R(self, n: np.ndarray, p: np.ndarray, sample: bool = False) -> np.ndarray:
+        """
+        Compute expected mutation matrix R from given N and P.
+
+        Evaluates R = 1 - (1-P)^N numerically stably.
+
+        Args:
+            n: Cellular generation array of length n_cells.
+            p: Mutation rate array of length n_sites.
+            sample: Whether to sample from Bernoulli(R) or return probability.
+
+        Returns:
+            Computed mutation matrix of shape (n_cells, n_sites).
+        """
         for x in [n,p]:
             assert isinstance(x, (torch.Tensor, np.ndarray)) and x.ndim == 1
         n_tensor = torch.Tensor(n).reshape([n.shape[0], 1])
@@ -1497,7 +2013,36 @@ class MutModel(AutoEncoderModel):
 
         return R
 
-    def posterior_X(self, n, p, X=None, posterior_threshold=0.95):
+    def posterior_X(
+        self,
+        n: np.ndarray,
+        p: np.ndarray,
+        X: Optional[np.ndarray] = None,
+        posterior_threshold: float = 0.95
+    ) -> np.ndarray:
+        """
+        Denoise mutation matrix using Bayesian posterior probability.
+
+        This method evaluates the confidence of each observed mutation call based on:
+        - Estimated cellular generation (N)
+        - Site-specific mutation rate (P)
+        - Cumulative mutation model R = 1 - (1-P)^N
+
+        It corrects low-confidence calls by reassigning them to wild-type status.
+
+        Args:
+            n: Estimated cellular generation array, shape (n_cells,).
+            p: Estimated mutation rate array, shape (n_sites,).
+            X: Observed mutation matrix; if None, uses stored X.
+            posterior_threshold: Threshold for calling a mutation confident.
+                                 Only posterior >= threshold will be kept as edit_value.
+
+        Returns:
+            Denoised mutation matrix with corrected calls:
+                - high-confidence mutations -> edit_value
+                - low-confidence mutations -> wt_value
+                - missing values -> set to miss_value (unchanged)
+        """
         if X is None:
             X = self.X
         mask = X==self.miss_value

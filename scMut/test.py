@@ -30,7 +30,25 @@ from .log import (
 )
 
 
-def setup_output_dir(save_dir=None, verbose=True, prefix=None):
+def setup_output_dir(
+    save_dir: Optional[str] = None,
+    verbose: bool = True,
+    prefix: Optional[str] = None
+) -> str:
+    """
+    Create and configure an output directory for saving results.
+
+    If no path is provided, generates a timestamped folder name.
+    Ensures the directory exists and returns its absolute path.
+
+    Args:
+        save_dir: Target directory path. If None, auto-generates one.
+        verbose: Whether to log directory creation.
+        prefix: Prefix for generated directory name.
+
+    Returns:
+        Absolute path to the created output directory.
+    """
     if prefix is None:
         prefix = 'temp_output'
     if save_dir is None:
@@ -45,7 +63,40 @@ def setup_output_dir(save_dir=None, verbose=True, prefix=None):
     return save_dir
 
 
-def config_params(model_params, load_params, train_params, run_model_method, dtype):
+def config_params(
+    model_params: Dict,
+    load_params: Dict,
+    train_params: Dict,
+    run_model_method: str,
+    dtype: str
+) -> Tuple[
+    Dict, Dict, Dict, Dict, Dict, Dict
+]:
+    """
+    Configure training parameters for different stages of the pipeline.
+
+    Prepares separate parameter dictionaries for NMF, VAE, and fine-tuning phases
+    based on user inputs and model settings.
+
+    Args:
+        model_params: Base model configuration (e.g., input_dim, z_dim).
+        load_params: Data loading settings (batch_size, num_workers, etc.).
+        train_params: Training hyperparameters (lr, patience, etc.).
+        run_model_method: Which pipeline to execute ('nmf', 'vae', etc.).
+        dtype: Floating-point precision ('float16', 'float32', 'float64').
+
+    Returns:
+        A tuple of six configured parameter dictionaries:
+            - _model_params: Finalized model initialization args
+            - _load_params: Finalized data loader args
+            - _train_nmf_params: Arguments for train_nmf()
+            - _train_vae_params: Arguments for train_np() / train()
+            - _train_ft_n_params: Arguments for finetune_n()
+            - _train_ft_p_params: Arguments for finetune_p()
+
+    Note:
+        Modifies batch_size if shape alignment issues are detected.
+    """
     if dtype == 'float16':
         torch_dtype = torch.float16
     elif dtype == 'float32':
@@ -114,7 +165,22 @@ def config_params(model_params, load_params, train_params, run_model_method, dty
     )
 
 
-def compare_data(data_dict):
+def compare_data(data_dict: Dict[str, np.ndarray]) -> Dict[str, Dict[str, float]]:
+    """
+    Compute pairwise statistical comparisons between vectors in a dictionary.
+
+    Calculates Pearson/Spearman correlation and linear regression metrics
+    for every pair of arrays.
+
+    Args:
+        data_dict: Dictionary mapping names to 1D arrays.
+
+    Returns:
+        Nested dictionary with keys like "key1_key2", containing:
+            - pearson_corr, pearson_p
+            - spearman_corr, spearman_p
+            - linreg_beta, linreg_r, linreg_p
+    """
     result = {}
     keys = list(data_dict.keys())
     for i in range(len(keys)):
@@ -140,7 +206,21 @@ def compare_data(data_dict):
     return result
 
 
-def plot_data(data_dict, save_dir=None, prefix=None):
+def plot_data(
+    data_dict: Dict[str, np.ndarray],
+    save_dir: Optional[str] = None,
+    prefix: Optional[str] = None
+) -> None:
+    """
+    Generate and optionally save pairwise regression plots.
+
+    Creates scatter + fit line plots using Seaborn's regplot for all pairs.
+
+    Args:
+        data_dict: Dictionary of named 1D arrays.
+        save_dir: Directory to save plots. If None, only creates in memory.
+        prefix: Optional prefix for saved file names.
+    """
     if save_dir is not None:
         if not os.path.exists(save_dir):
             save_dir = None
@@ -162,21 +242,70 @@ def plot_data(data_dict, save_dir=None, prefix=None):
 
 
 def run_once(
-    X,
-    run_model_method,
-    max_n = None,
-    model_params = dict(),
-    load_params = dict(),
-    train_params = dict(),
-    train_transpose = False,
+    X: np.ndarray,
+    run_model_method: Literal[
+        "nmf", "vae", "nmf+vae", "nmf+ft", "vae+ft",
+        "nmf+vae+ft", "nmf+ft+vae"
+    ],
+    max_n: Optional[int] = None,
+    model_params: Dict = dict(),
+    load_params: Dict = dict(),
+    train_params: Dict = dict(),
+    train_transpose: bool = False,
     dtype: str = 'float32',
-    seed = 42,
-    save_dir = None,
-    verbose = True,
-    real_n = None,
-    real_p = None,
-    vae_type = 'mode1'
-):
+    seed: int = 42,
+    save_dir: Optional[str] = None,
+    verbose: bool = True,
+    real_n: Optional[np.ndarray] = None,
+    real_p: Optional[np.ndarray] = None,
+    vae_type: Literal["mode1", "mode2"] = 'mode1'
+) -> Tuple[
+    MutModel,
+    Dict[str, List[float]],
+    float,
+    Dict[str, np.ndarray],
+    Dict[str, np.ndarray],
+    Dict[str, np.ndarray],
+    Dict[str, Dict[str, Dict[str, float]]]
+]:
+    """
+    Run a single instance of the mutation inference pipeline.
+
+    Executes one complete analysis including simulation, model training,
+    evaluation, visualization, and result collection.
+
+    Supports multiple execution modes:
+        - nmf: Only NMF decomposition
+        - vae: Two-stage VAE training
+        - ft: Fine-tuning via integer scaling
+        - Combinations of above
+
+    Args:
+        X: Observed mutation matrix of shape (n_cells, n_sites) or (n_sites, n_cells).
+        run_model_method: Pipeline mode to execute.
+        max_n: Maximum expected cellular generation count.
+        model_params: Overrides for MutModel constructor.
+        load_params: Overrides for load_data().
+        train_params: Hyperparameters for training steps.
+        train_transpose: Whether to transpose input during training.
+        dtype: Floating point precision.
+        seed: Random seed for reproducibility.
+        save_dir: Directory to save figures and logs.
+        verbose: Print progress messages.
+        real_n: Ground truth generation counts (for comparison).
+        real_p: Ground truth mutation rates (for comparison).
+        vae_type: Training sequence for VAE ('mode1' or 'mode2').
+
+    Returns:
+        tuple: (model, loss_dict, run_seconds, n_dict, p_dict, xz_dict, stat_dict)
+            - model: Trained MutModel instance.
+            - loss_dict: Training losses per stage.
+            - run_seconds: CPU time used.
+            - n_dict: Estimated/ground-truth N values.
+            - p_dict: Estimated/ground-truth P values.
+            - xz_dict: Reconstructed matrices and latent spaces.
+            - stat_dict: Statistical comparison results.
+    """
     assert dtype in ['float16', 'float32', 'float64']
     assert run_model_method in ['nmf','vae','nmf+vae','nmf+ft','vae+ft','nmf+vae+ft','nmf+ft+vae']
     assert 'train_transpose' not in model_params, 'Set train_transpose directly rather than in model_params!'
@@ -415,10 +544,50 @@ def run_once(
 
 
 def run_pipe(
-    run_model_method, n_repeat=100, save_dir=None, verbose=True, vae_type='mode1', beta_pairs=None, # this line could change
-    n_cells = 1000, n_sites = 2000, max_n = 50, ratio2 = 0.5, survival_rate = 0.6, noise_level = 0.1, # this line should fix
-    **pipe_kwargs # changes about how to run model 
-):
+    run_model_method: str,
+    n_repeat: int = 100,
+    save_dir: Optional[str] = None,
+    verbose: bool = True,
+    vae_type: Literal["mode1", "mode2"] = 'mode1',
+    beta_pairs: Optional[List[Tuple[float, float, Optional[float], Optional[float]]]] = None, 
+    # recommend to fix params below this line
+    n_cells: int = 1000,
+    n_sites: int = 2000,
+    max_n: int = 50,
+    ratio2: float = 0.5,
+    survival_rate: float = 0.6,
+    noise_level: float = 0.1,
+    **pipe_kwargs # changes about how to run model
+) -> Dict:
+    """
+    Run a full benchmarking pipeline across multiple simulated datasets.
+
+    Repeats simulation and inference for different mutation rate priors
+    and random seeds, then saves comprehensive results.
+
+    Used for performance evaluation and method comparison.
+
+    Args:
+        run_model_method: Which algorithmic approach to test.
+        n_repeat: Number of times to repeat each condition.
+        save_dir: Root directory for outputs.
+        verbose: Print detailed logs.
+        vae_type: VAE training sequence.
+        beta_pairs: List of Beta distribution parameters for mutation rate prior.
+        n_cells: Number of cells to simulate.
+        n_sites: Number of genomic sites.
+        max_n: Maximum allowed cell generation.
+        ratio2: Proportion of sites from second component in bimodal prior.
+        survival_rate: Cell division probability after early generations.
+        noise_level: Fraction of observations to mask.
+        **pipe_kwargs: Additional arguments passed to run_once().
+
+    Returns:
+        Dictionary containing:
+            - params: Simulation and run configuration
+            - simple: Results from flat simulations
+            - lineage: Results from tree-based simulations
+    """
     assert n_repeat > 0
     if 'train_transpose' in pipe_kwargs and pipe_kwargs['train_transpose']:
         prefix=f'trans_{run_model_method}'

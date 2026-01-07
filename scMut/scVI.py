@@ -33,9 +33,15 @@ class scVIEncoder(Encoder):
         fc_logvar (nn.Linear): Linear layer for log variance of latent distribution
     """
     def __init__(
-            self, input_dim, hidden_dims, z_dim, activation='relu', 
-            dropout_rate=0.1, use_batch_norm=False, use_layer_norm=True
-        ):
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
+        dropout_rate: float = 0.1,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = True,
+    ):
         super().__init__(
             input_dim, hidden_dims, z_dim, model_type='VAE', 
             dropout_rate=dropout_rate, 
@@ -56,19 +62,24 @@ class scVIDecoder(Decoder):
         z_dim (int): Dimension of the latent space
         hidden_dims (list): Dimensions of hidden layers
         output_dim (int): Number of output features (genes)
-        activation (str, optional): Activation function. Defaults to 'relu'
-            Options: 'relu', 'leakyrelu', 'gelu'
-            
+        activation (str, optional): Activation function. Defaults to 'none'
+        
     Attributes:
-        hidden_layers (nn.Sequential): Sequential container of hidden layers
-        px_scale (nn.Linear): Linear layer for mean parameter of ZINB
-        px_r (nn.Linear): Linear layer for dispersion parameter of ZINB
-        px_dropout (nn.Linear): Linear layer for dropout parameter of ZINB
+        hidden_layers (nn.Sequential): Hidden layer stack
+        px_scale (nn.Sequential): Output layer for normalized mean (uses Softmax)
+        px_r (nn.Linear): Dispersion parameter (r) per gene
+        px_dropout (nn.Linear): Dropout probability logits per gene
     """
     def __init__(
-            self, z_dim, hidden_dims, output_dim, activation='none', # decoder should have no activation
-            dropout_rate=0, use_batch_norm=False, use_layer_norm=True
-        ):
+        self,
+        z_dim: int,
+        hidden_dims: List[int],
+        output_dim: int,
+        activation: Literal["none"] = 'none',
+        dropout_rate: float = 0,
+        use_batch_norm: bool = False,
+        use_layer_norm: bool = True,
+    ):
         super().__init__(
             z_dim=z_dim, hidden_dims=hidden_dims, output_dim=output_dim, activation=activation, 
             dropout_rate=dropout_rate, use_batch_norm=use_batch_norm, use_layer_norm=use_layer_norm
@@ -92,19 +103,20 @@ class scVIDecoder(Decoder):
         # dropout
         self.px_dropout = nn.Linear(hidden_dims[-1], output_dim)
 
-    def forward(self, z, library):
+    def forward(self, z: torch.Tensor, library: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Forward pass of the decoder.
         
         Args:
-            z (torch.Tensor): Latent space representation
-            
+            z (torch.Tensor): Latent tensor of shape (batch_size, z_dim)
+            library (torch.Tensor): Library size log-sum tensor of shape (batch_size, 1)
+
         Returns:
-            dict: Dictionary containing ZINB parameters
-                - 'scale': Mean parameter (μ)
-                - 'r': Inverse dispersion parameter
-                - 'rate': rate parameter
-                - 'dropout': Dropout probability
+            dict: Dictionary containing ZINB parameters:
+                - 'scale': Normalized mean (softmax-normalized), shape (batch_size, n_genes)
+                - 'r': Dispersion parameter (theta inverse), shape (batch_size, n_genes)
+                - 'rate': Final rate λ = exp(library) * scale, shape (batch_size, n_genes)
+                - 'dropout': Dropout logits, shape (batch_size, n_genes)
         """
         # from scVI
         px = self.hidden_layers(z)
@@ -142,7 +154,11 @@ class scVI(VAE):
         decoder (scVIDecoder): Decoder network
     """
     def __init__(
-        self, input_dim, hidden_dims, z_dim, activation='relu', 
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
     ):
@@ -165,20 +181,33 @@ class scVI(VAE):
             use_layer_norm=self.use_layer_norm_decoder
         )
     
-    def forward(self, x, library):
+    def forward(
+        self,
+        x: torch.Tensor,
+        library: torch.Tensor
+    ) -> Tuple[
+        torch.Tensor,                    # x_input
+        Dict[str, torch.Tensor],         # outputs (ZINB params)
+        torch.Tensor,                    # mu
+        torch.Tensor,                    # logvar
+        Optional[torch.distributions.Normal],  # qz
+        torch.Tensor                     # z
+    ]:
         """
         Forward pass of the model.
         
         Args:
-            x (torch.Tensor): Input gene expression data
-            
+            x (torch.Tensor): Input tensor of shape (batch_size, input_dim)
+            library (torch.Tensor): Log-library size tensor of shape (batch_size, 1)
+
         Returns:
-            tuple:
-                - outputs (dict): ZINB parameters from decoder
-                - mu (torch.Tensor): Mean of latent distribution
-                - logvar (torch.Tensor): Log variance of latent distribution
-                - qz (torch.Tensor): Distribution of latent distribution
-                - z (torch.Tensor): Latent space representation
+            tuple: Contains:
+                - x: Original input
+                - outputs: ZINB parameter dictionary from decoder
+                - mu: Latent mean
+                - logvar: Latent log-variance
+                - qz: Approximate posterior distribution
+                - z: Sampled latent vector
         """
         mu, logvar = self.encoder(x)
         qz, z = self.reparameterize(mu, logvar)
@@ -192,53 +221,58 @@ class scVIModel(AutoEncoderModel):
     This class handles the training and evaluation of the scVI model,
     specifically designed for single-cell RNA sequencing data analysis.
     
-    Args:
-        input_dim (int): Number of input features (genes)
-        hidden_dims (list): Dimensions of hidden layers
-        z_dim (int): Dimension of the latent space
-        num_epochs (int): Number of training epochs
-        lr (float, optional): Learning rate. Defaults to 1e-3
-        device (str, optional): Device to use. Defaults to DEVICE
-        seed (int, optional): Random seed. Defaults to 42
-        activation (str, optional): Activation function. Defaults to 'relu'
-        use_batch_norm
-            Specifies where to use :class:`~torch.nn.BatchNorm1d` in the model. One of the following:
+    It extends AutoEncoderModel with ZINB-based reconstruction loss
+    and library size normalization.
 
-            * ``"none"``: don't use batch norm in either encoder(s) or decoder.
-            * ``"encoder"``: use batch norm only in the encoder(s).
-            * ``"decoder"``: use batch norm only in the decoder.
-            * ``"both"``: use batch norm in both encoder(s) and decoder.
-
-            Note: if ``use_layer_norm`` is also specified, both will be applied (first
-            :class:`~torch.nn.BatchNorm1d`, then :class:`~torch.nn.LayerNorm`).
-        use_layer_norm
-            Specifies where to use :class:`~torch.nn.LayerNorm` in the model. One of the following:
-
-            * ``"none"``: don't use layer norm in either encoder(s) or decoder.
-            * ``"encoder"``: use layer norm only in the encoder(s).
-            * ``"decoder"``: use layer norm only in the decoder.
-            * ``"both"``: use layer norm in both encoder(s) and decoder.
-
-            Note: if ``use_batch_norm`` is also specified, both will be applied (first
-            :class:`~torch.nn.BatchNorm1d`, then :class:`~torch.nn.LayerNorm`).
-        **kwargs: Additional arguments passed to AutoEncoderModel
-        
-    Attributes:
-        model (scVI): The scVI model instance
-        optimizer (torch.optim.Adam): Adam optimizer
-        train_metrics (list): List of training metrics
-        valid_metrics (list): List of validation metrics
-        current_metrics (dict): Current epoch metrics
+    Example:
+        model = scVIModel(
+            input_dim=2000,
+            hidden_dims=[128],
+            z_dim=10,
+            num_epochs=200
+        )
+        model.load_data(X, batch_size=256)
+        losses = model.train()
     """
     def __init__(
-        self, input_dim, hidden_dims, z_dim, num_epochs, 
-        lr=1e-3, beta=1, device=DEVICE, dtype=torch.float32,
-        seed=42, eps=1e-10,
+        self,
+        input_dim: int,
+        hidden_dims: List[int],
+        z_dim: int,
+        num_epochs: int,
+        lr: float = 1e-3,
+        beta: float = 1.0,
+        device: Union[str, torch.device] = DEVICE,
+        dtype: torch.dtype = torch.float32,
+        seed: int = 42,
+        eps: float = 1e-10,
         activation: Literal["relu", "leakyrelu", "gelu"] = 'relu',
         use_batch_norm: Literal["encoder", "decoder", "none", "both"] = "none",
         use_layer_norm: Literal["encoder", "decoder", "none", "both"] = "both",
         **kwargs
     ):
+        """
+        Initialize the scVI model.
+        
+        Args:
+            input_dim: Number of input features (genes).
+            hidden_dims: Sizes of hidden layers in encoder/decoder.
+            z_dim: Dimensionality of latent space.
+            num_epochs: Maximum number of training epochs.
+            lr: Learning rate for Adam optimizer.
+            beta: Weight for KL divergence term.
+            device: Device to run on ('cpu' or 'cuda').
+            dtype: Data type for tensors.
+            seed: Random seed for reproducibility.
+            eps: Small epsilon value for numerical stability.
+            activation: Activation function ('relu', 'leakyrelu', 'gelu').
+            use_batch_norm: Where to apply BatchNorm1d.
+            use_layer_norm: Where to apply LayerNorm.
+            **kwargs: Additional arguments passed to parent class.
+
+        See Also:
+            AutoEncoderModel.__init__ for additional details on normalization options.
+        """
         super().__init__(
             input_dim=input_dim,
             hidden_dims=hidden_dims,
@@ -266,11 +300,31 @@ class scVIModel(AutoEncoderModel):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
         # torch.autograd.set_detect_anomaly(True)
 
-    def _compute_library(self, X):
+    def _compute_library(self, X: torch.Tensor) -> torch.Tensor:
+        """
+        Compute log library size for each cell.
+
+        Used to normalize total expression before decoding.
+
+        Args:
+            X (torch.Tensor): Raw count matrix of shape (batch_size, n_genes)
+
+        Returns:
+            torch.Tensor: Log-sum of counts per cell, reshaped to (batch_size, 1)
+        """
         library = torch.log(X.sum(1)).unsqueeze(1)
         return library
     
-    def _px(self, px_param_dict):
+    def _px(self, px_param_dict: Dict[str, torch.Tensor]) -> ZeroInflatedNegativeBinomial:
+        """
+        Construct a ZINB distribution from parameter dictionary.
+
+        Args:
+            px_param_dict: Output from decoder containing 'rate', 'r', 'dropout', 'scale'
+
+        Returns:
+            ZeroInflatedNegativeBinomial: A fully specified ZINB distribution object.
+        """
         px = ZeroInflatedNegativeBinomial(
             mu=px_param_dict['rate'],
             theta=px_param_dict['r'].exp(),
@@ -279,23 +333,43 @@ class scVIModel(AutoEncoderModel):
         )
         return px
 
-    def _zinb_loss(self, x, px):
+    def _zinb_loss(self, x: torch.Tensor, px: ZeroInflatedNegativeBinomial) -> torch.Tensor:
+        """
+        Compute ZINB negative log-likelihood loss.
+
+        Args:
+            x (torch.Tensor): Observed count data
+            px (ZeroInflatedNegativeBinomial): Predicted ZINB distribution
+
+        Returns:
+            Scalar reconstruction loss summed over genes and averaged over batch.
+        """
         reconst_loss = -px.log_prob(x).sum(-1).sum()
         return reconst_loss
     
-    def loss_function(self, x, outputs, mu, logvar, qz, z, *args, **kwargs):
+    def loss_function(
+        self,
+        x: torch.Tensor,
+        outputs: Dict[str, torch.Tensor],
+        mu: torch.Tensor,
+        logvar: torch.Tensor,
+        qz: Optional[torch.distributions.Normal],
+        z: torch.Tensor,
+        *args, **kwargs
+    ) -> torch.Tensor:
         """
-        Calculate the total loss combining ZINB and KL divergence.
+        Calculate the total loss combining ZINB reconstruction and KL divergence.
         
         Args:
-            x (torch.Tensor): Input data
-            outputs (dict): ZINB parameters from decoder
-            mu (torch.Tensor): Mean of latent distribution
-            logvar (torch.Tensor): Log variance of latent distribution
-            others
-            
+            x: Input data (raw counts)
+            outputs: ZINB parameters predicted by decoder
+            mu: Mean of latent distribution
+            logvar: Log-variance of latent distribution
+            qz: Posterior distribution (for monitoring)
+            z: Sampled latent vector
+
         Returns:
-            torch.Tensor: Total loss value
+            Total loss scalar (reconstruction + beta * KL)
         """
         batch_size = x.size(0)
         px = self._px(outputs)
@@ -312,12 +386,12 @@ class scVIModel(AutoEncoderModel):
         
         return total_loss
     
-    def _train_epoch(self):
+    def _train_epoch(self) -> Dict[str, float]:
         """
         Train the model for one epoch.
         
         Returns:
-            dict: Average metrics for the epoch
+            Average metrics for this epoch (e.g., zinb_loss, kl_loss, total_loss)
         """
         self.model.train()
         total_metrics = defaultdict(float)
@@ -343,25 +417,29 @@ class scVIModel(AutoEncoderModel):
         self.train_metrics.append(avg_metrics)
         return avg_metrics
 
-    def _sample_from_zinb(self, px):
+    def _sample_from_zinb(self, px: ZeroInflatedNegativeBinomial) -> torch.Tensor:
         """
         Sample from ZINB distribution.
-            
+        
+        Args:
+            px: A trained ZINB distribution object
+
         Returns:
             Samples from ZINB distribution (non-negative integers)
         """
         set_seed(self.seed)
         return px.sample()
 
-    def _get_reconstructions(self, use_mu=False):
+    def _get_reconstructions(self, use_mu: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         Get latent representations and reconstructions for the full dataset.
 
         Args:
-            use_mu (bool): Use Mean Expression Layer output as reconstructed X, default False
-            
+            use_mu (bool): If True, uses mean expression (rate) as reconstruction;
+                          if False, samples from ZINB distribution.
+
         Returns:
-            (Z, Xhat): embedded layer and reconstructed X
+            tuple: (Z_latent, Xhat_reconstructed) arrays of shape (n_samples, z_dim) and (n_samples, input_dim)
         """
         self.model.eval()
         z_list, xhat_list = [], []
