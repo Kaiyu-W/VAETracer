@@ -1024,10 +1024,10 @@ class MutModel(AutoEncoderModel):
         assert self.train_transpose, 'Parameter n only exists in model with train_transpose=True!'
         n_init = _input_tensor(
             n_init, 
-            device=self.model.n.device, 
+            device=self.model.n_logit.device, 
             dtype=self.dtype
         )
-        assert n_init.shape == self.model.n.shape, "n_init must match shape of model's n!"
+        assert n_init.shape == self.model.n_logit.shape, "n_init must match shape of model's n!"
         
         with torch.no_grad():
             self.model.n_logit.copy_(
