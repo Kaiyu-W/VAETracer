@@ -357,7 +357,7 @@ def run_once(
     _load_params = dict(
         X=X, 
         batch_size=1000, 
-        num_workers=15, 
+        num_workers=1, 
         pin_memory=True, 
         dtype=None, 
         shuffle=True, 
