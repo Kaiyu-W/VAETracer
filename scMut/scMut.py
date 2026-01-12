@@ -20,7 +20,7 @@ from .utils import (
     _input_tensor, 
     _softplus_inverse
 )
-from .typing import Tuple, Optional, Literal
+from .typing import *
 from .log import logger
 
 

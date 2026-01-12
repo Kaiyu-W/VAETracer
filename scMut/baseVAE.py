@@ -14,7 +14,7 @@ from .utils import (
     DEVICE,
     _input_tensor
 )
-from .typing import Tuple, Optional, Literal
+from .typing import *
 from .log import logger
 
 
@@ -100,7 +100,7 @@ class Encoder(nn.Module):
         else:
             raise ValueError("Invalid model type. Choose 'AE' or 'VAE'.")
 
-     def forward_vae(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward_vae(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass for VAE: returns mu and logvar.
         """
@@ -174,7 +174,7 @@ class Decoder(nn.Module):
         self.hidden_layers = nn.Sequential(*layers)
         self.output_layer = nn.Linear(hidden_dims[-1], output_dim)
 
-     def forward(self, z: torch.Tensor) -> torch.Tensor:
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
         """
         Forward pass: reconstruct input from latent code.
 
@@ -331,7 +331,7 @@ class VAE(nn.Module):
             use_layer_norm=self.use_layer_norm_decoder
         )
 
-     def reparameterize(
+    def reparameterize(
         self, mu: torch.Tensor, logvar: torch.Tensor
     ) -> Tuple[Optional[Normal], torch.Tensor]:
         """

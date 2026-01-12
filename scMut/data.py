@@ -1,7 +1,7 @@
 import re
 import numpy as np
 import matplotlib.pyplot as plt
-from .typing import Tuple, Optional, Union, Dict, List, Deque
+from .typing import *
 from collections import deque, defaultdict
 from .log import logger
 

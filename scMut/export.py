@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import csr_matrix
-from .typing import Dict, Optional, Union
+from .typing import *
 import warnings
 
 def save_model_to_adata(

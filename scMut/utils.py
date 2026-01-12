@@ -8,6 +8,7 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn")
 from sklearn.manifold import TSNE
 
 from .log import logger
+from .typing import *
 try:
     from umap import UMAP
 except:

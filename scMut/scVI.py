@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from collections import defaultdict
@@ -10,7 +11,7 @@ from .baseVAE import (
 )
 from .zinb_dist import ZeroInflatedNegativeBinomial
 from .utils import set_seed, DEVICE
-from .typing import Tuple, Optional, Literal
+from .typing import *
 
 
 class scVIEncoder(Encoder):
