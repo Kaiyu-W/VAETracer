@@ -33,6 +33,11 @@ MutTracer can order cells by generation (N) obtained from `scMut`, or by explici
 ---
 
 
+# Setup environment
+
+conda env create -f environment.yml
+conda activate sc_vae_pytorch
+
 
 
 
