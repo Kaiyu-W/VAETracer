@@ -1,0 +1,15 @@
+name: sc_vae_pytorch
+channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - http://conda.anaconda.org/dranew
+  - bioconda
+  - conda-forge
+  - http://conda.anaconda.org/gurobi
+  - defaults
+  - r
+dependencies:
+  - python=3.9
+  - openssl==3.4.1
+prefix: /sibcb1/chenluonanlab6/panlinnuo/anaconda3/envs/sc_vae_pytorch
