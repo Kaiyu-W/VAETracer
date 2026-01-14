@@ -92,5 +92,5 @@ def process_h5ad_to_zxt(h5ad_path, output_path='adc_zx_dict.pt'):
 if __name__ == "__main__":
     process_h5ad_to_zxt(
         h5ad_path='scRNAlistep.h5ad',
-        output_path='zxt.pt'
+        output_path='z_xt.pt'
     )
