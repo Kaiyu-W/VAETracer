@@ -243,7 +243,6 @@ if __name__ == "__main__":
                 results.test_losses.append(avg_test_loss)
                 if avg_test_loss < best_mse:
                     best_mse = avg_test_loss
-                    torch.save(system.predictor.state_dict(), 'best_model.pth')
                     results.best_model = copy.deepcopy(system.predictor.state_dict())
                     results.best_epoch = epoch
                     results.best_prediction = epoch_preds
@@ -268,8 +267,6 @@ if __name__ == "__main__":
                
                     pred_tensor = torch.stack(pred_list)
                     true_tensor = torch.stack(true_list)
-                    
-                
                     your_mse = F.mse_loss(pred_tensor, true_tensor).item()
                     if your_mse < best_mse:
                         best_mse = your_mse
@@ -280,9 +277,7 @@ if __name__ == "__main__":
 
             pbar.update(1)
                 
-    plot_full_timeline(system, aligned_z_real_dict, aligned_zxt_dict, device, args)
 
-    plot_enhanced_loss(system, args)
     final_pred, _ = system.predict_sequence(zt_test, zxt_test)
     final_metrics = system.evaluate_predictions(zt_test, zxt_test)
     results.final_prediction = final_pred  
@@ -375,11 +370,7 @@ if __name__ == "__main__":
         plot_format="pdf",
         ancestor_time=ancestor_time
     )
-    
-
-   
     plot_training_loss(system, args, filename="full_loss")
-
 
     save_results(results, args, epochs, input_time_points, predict_time_points, filename='training_results.pkl')
 
