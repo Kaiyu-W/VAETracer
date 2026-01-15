@@ -1,0 +1,13 @@
+numpy
+pandas
+scipy
+scikit-learn
+umap-learn
+matplotlib
+seaborn
+tqdm
+anndata
+torch
+# new
+scanpy
+scvi-tools

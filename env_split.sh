@@ -23,6 +23,16 @@ check_install_2() {
     return $success
 }
 
+check_install_2_scvi() {
+    local success=0
+    echo "[check] cmd/package: "
+    for py_package in torch scvi scanpy pyarrow; do
+        python -c "import $py_package; print(\"$py_package\", $py_package.__version__); print(\"torch.cuda.is_available() =\",torch.cuda.is_available()) if \"$py_package\" == 'torch' else None; print(\"scvi.settings.jax_preallocate_gpu_memory =\",scvi.settings.jax_preallocate_gpu_memory) if \"$py_package\" == 'scvi' else None" 2>/dev/null \
+        || { echo "$py_package cannot be imported! "; success=1; }
+    done
+    return $success
+}
+
 check_install_3() {
     local success=0
     echo "[check] cmd/package: "
@@ -32,6 +42,7 @@ check_install_3() {
     done
     return $success
 }
+
 
 env_create_1() {
     local conda_bin=$1
@@ -112,7 +123,7 @@ env_create_2() {
 
     # create new environment
     $run create -n $env_name -c conda-forge \
-        'python=3.7' uv gcc gxx --yes 1>&2 \
+        'python=3.8' uv gcc gxx --yes 1>&2 \
     && $run activate $env_name || return $?
     # uv: accelerate pip
     # gcc/gxx: In case the built-in compiler is too old
@@ -126,15 +137,56 @@ env_create_2() {
         "torchaudio==$torchaudio_version" \
         "cudatoolkit=$cudatoolkit_version" \
         "mkl==2024.0" \
-        scanpy python-igraph leidenalg \
+        "scanpy<1.10" python-igraph leidenalg \
         ipykernel ipywidgets tqdm \
         --yes 1>&2 || return $?
+    # scanpy 1.9.x supports python 3.8; scanpy 1.9.3 supports python 3.7
 
     # notebook kernal
     python -m ipykernel install --user --name $env_name --display-name "$env_name(python)" || return $?
 
     # test
     check_install_2 && echo "Successfully create $env_name" || return $?
+}
+
+env_create_2_scvi() {
+    local conda_bin=$1
+    local mamba_avoid=$2
+    local env_name=$3
+
+    # initial conda
+    eval "$($conda_bin shell.bash hook)"
+    conda activate base # avoid already activate other env
+
+    if $mamba_avoid; then
+        run=conda
+    else
+        # initial mamba
+        which mamba >/dev/null 2>&1 || conda install -n base -c conda-forge mamba --yes 1>&2 || return $?
+        eval "$(mamba shell hook --shell bash)"
+        run=mamba
+    fi
+
+    # create new environment
+    $run create -n $env_name \
+        -c conda-forge -c pytorch -c nvidia -c bioconda \
+        'python=3.11' uv gcc gxx \
+        pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 \
+        scvi-tools "jaxlib=*=*cuda*" jax \
+        pyarrow scanpy ipykernel ipywidgets tqdm \
+        --yes 1>&2 \
+    && $run activate $env_name || return $?
+    # uv: accelerate pip
+    # gcc/gxx: In case the built-in compiler is too old
+    # python 3.11 for scvi-tools only support 3.11-13 (till now 2026/1); if not install scvi-tools, python can be 3.7/3.8
+    # PyTorch 2.5.1 is required for python 3.11. Due to changes in PyTorch's installation mechanism starting from version 2.x.x, the installation command is hardcoded here. For other versions, please refer to the official website.
+    # scvi-tools depends on both JAX and PyTorch. While PyTorch's CUDA support is handled during installation, JAX requires careful checking of the system's CUDA driver compatibility (JAX needs CUDA ≥12.1). If GPU acceleration for JAX is not needed, avoid installing "jaxlib=*=*cuda*" and jax for scvi-tools.
+
+    # notebook kernal
+    python -m ipykernel install --user --name $env_name --display-name "$env_name(python)" || return $?
+
+    # test
+    check_install_2_scvi && echo "Successfully create $env_name" || return $?
 }
 
 env_create_3() {
@@ -158,8 +210,12 @@ env_create_3() {
     fi
 
     # create new environment
-    $run create -n $env_name -c conda-forge \
-        "python=${python_version}" uv gcc gxx --yes 1>&2 \
+    $run create -n $env_name -c conda-forge -c pytorch -c nvidia -c bioconda \
+        'python=3.11' uv gcc gxx \
+        pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 \
+        scvi-tools "jaxlib=*=*cuda*" jax \
+        pyarrow scanpy \
+        --yes 1>&2 \
     && $run activate $env_name || return $?
     # uv: accelerate pip
     # gcc/gxx: In case the built-in compiler is too old
@@ -234,13 +290,16 @@ mamba_avoid=false
 main() {
     local success=0
 
-    env_create_1 $conda_bin $mamba_avoid VAEtracer_vcf \
+    env_create_1 $conda_bin $mamba_avoid vaetracer_vcf \
     || { echo 'Some error happened! Please install the package manually!'; success=$(( success+1 )); }
 
-    env_create_2 $conda_bin $mamba_avoid VAEtracer_vae $pytorch_version $cudatoolkit_version \
+    env_create_2 $conda_bin $mamba_avoid vaetracer_vae $pytorch_version $cudatoolkit_version \
     || { echo 'Some error happened! Please install the package manually!'; success=$(( success+1 )); }
 
-    env_create_3 $conda_bin $mamba_avoid VAEtracer_sc "$cassiopeia_github_folder" "3.10" \
+    env_create_2_scvi $conda_bin $mamba_avoid vaetracer_vae_scvi \
+    || { echo 'Some error happened! Please install the package manually!'; success=$(( success+1 )); }
+
+    env_create_3 $conda_bin $mamba_avoid vaetracer_sc "$cassiopeia_github_folder" "3.10" \
     || { echo 'Some error happened! Please install the package manually!'; success=$(( success+1 )); }
 
     return $success
