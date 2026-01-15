@@ -32,14 +32,14 @@ python GetAF.py
 
 ### 2) scMut: Mutation Matrix Decomposition
 
-The `scMut` module decomposes the 2D mutation profile **M** into two biologically interpretable components:
+The `scMut` (single-cell Mutation Parser) module decomposes the 2D mutation profile **M** into two biologically interpretable components:
 
 - **N**: Cell generation index (lineage time)
 - **P**: Site-specific mutation rate (mutation bias)
 
 It consists of three submodules:
 
-- `NMF`: Non-negative Matrix Factorization, for initial and best decomposition
+- `NMF`: Non-negative Matrix Factorization, for initial and best decomposition (gNMF in paper)
 - `VAE`: Variational Autoencoder, with two operational modes:
   <pre>
   ● mode1-`np`: 
@@ -158,28 +158,94 @@ Provides utility functions for lineage tree processing and format interoperabili
 
 ## 2. Environment Installation
 
-Due to dependency conflicts among packages, we provide ``env_split.sh`` to automatically set up three isolated Conda environments:
+Due to complex dependency requirements across different analysis stages, such as single-cell preprocessing (`scanpy`), lineage tree reconstruction (`Cassiopeia`), statistical modeling (`statsmodels`), and gene set enrichment analysis (`gseapy`), integrating all tools into a single Conda environment is challenging. This difficulty arises from two main factors:
 
-1) **VAETracer_vcf**
-    - For upstream data processing
+- Divergent installation methods: Some packages (e.g., `Cassiopeia`) are only reliably installed via `pip` or `make`(direct source compilation), not through `conda`;
+- Version conflicts: Critical dependencies like `PyTorch` have strict version constraints (python or dependency version) that often clash with other ecosystem packages.
+
+To ensure reproducibility and avoid environment corruption, we provide ``env_split.sh``, a script that automatically sets up multiple isolated Conda environments (we have verified the feasibility of the versions):
+
+1) **`vaetracer_vcf`**
+    - For upstream data processing (`preprocess`)
     - Dependencies:
-`sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR`, `pysam`, `pyarrow` 
+`sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR`, `pysam`, `pyarrow` and `pyranges` 
+    - `bash=5` for `wait`'s enhanced functionality
     - Recommended version consistency with scripts for compatibility
 
-2) **VAETracer_vae**
-    - For scMut modeling and decomposition
+2) **`vaetracer_vae`** or **`vaetracer_vae_scvi`**
+    - For modeling and decomposition (`scMut` or/and `MutTracer`)
     - Dependencies:
-`pytorch`, `pyarrow`, `scipy`, `scikit-learn`, `umap-learn,` `scanpy`
+`pytorch`, `pyarrow`, `scipy`, `scikit-learn`, `umap-learn,` `scanpy` and others (`scvi-tools`)
+    - `pyarrow` for reading output from `preprocess`
+    - `scvi-tools` is only required for `MutTracer` and is challenging to install due to numerous dependencies and strict version requirements. Therefore, users should set up the environment according to their specific needs.
 
-3) **VAETracer_sc**
-    - For downstream analysis with scRNA-seq data
+3) **`vaetracer_sc`**
+    - For downstream analysis with Omics data
     - Dependencies:
 `scanpy` (for single-cell analysis), `cassiopeia` (for lineage tree construction), and others
 
-Alternatively, users may manually create the environments and configure the corresponding dependencies as needed.
+We attempted to combine `preprocess` and `scMut`/`MutTracer` in a single environment, but the `jax` version required by `scvi-tools` conflicts under `Python=3.8`; we did not further investigate the root cause. However, removing `scvi-tools` resolves the conflict, indicating that `preprocess` and `scMut` can coexist in one environment of low version of Python. In theory, the three modules can be performed in an environment of high version Python, but separate environments help user achieve specific requirements. Therefore, users may manually create the environments and configure the corresponding dependencies as needed. 
+We attempted to combine `preprocess` and `scMut`/`MutTracer` in a single environment, but encountered a version conflict with `jax` due to the requirements of `scvi-tools` under `Python=3.8`; we did not investigate the root cause further. However, removing `scvi-tools` resolves the conflict, indicating that `preprocess` and `scMut` can coexist in a single environment with an **older** Python version. In theory, all three modules can be integrated in an environment with a **newer** Python version, but maintaining separate environments offers greater **flexibility** and helps users meet specific requirements. Therefore, users are encouraged to manually create and configure environments according to their needs.
+
+If you only intend to run the core `scMut` or `MutTracer` modules, please refer to the dependency lists in `scMut_requirements.txt` and `MutTracer_requirements.txt`. In short, you can set up a Python environment with the following steps:
+
+```bash
+# conda environment for both MutTracer and scMut:
+
+    # 1. install PyTorch, and JAX (with jaxlib) for scvi-tools (choose the correct CUDA version based on your hardware)
+    # 2. install scvi-tools
+    # 3. install scanpy 
+    
+    # example (pytorch==2.5.1 and use cuda rather than cpu)
+        conda create -n vaetracer \
+            -c conda-forge -c pytorch -c nvidia -c bioconda \
+            'python=3.11' uv gcc gxx \
+            pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 \
+            scvi-tools "jaxlib=*=*cuda*" jax \
+            scanpy
+
+    # note: scvi-tools only supports cuda12-13 and python 3.11-13 (2026.1)
+
+
+# or if scvi-tools is not required (only use scMut) (Step by step):
+
+    # 1. Install PyTorch (choose the correct version based on your hardware from https://pytorch.org/)
+        
+        # example
+            # create conda env
+            conda create -n vaetracer -c conda-forge 'python=3.7' uv gcc gxx 'bash=5' 
+            # python 3.7 or 3.8 for pytorch=1.12.0
+            # uv gcc gxx bash for new version
+
+            # activate
+            conda activate vaetracer
+
+            # install pytorch of old version (<2), or other higher version
+            conda install -c pytorch -c conda-forge \
+                "pytorch==1.12.0" \
+                "torchvision==0.13.0" \
+                "torchaudio==0.12.0" \
+                "cudatoolkit=11.6" \
+                "mkl==2024.0"
+
+    # 2. Install remaining dependencies
+
+        conda install -c conda-forge \
+            numpy pandas scipy scikit-learn umap-learn matplotlib seaborn tqdm anndata
+
+        # or direct:
+        conda install -c conda-forge "scanpy<1.9.4"  
+        # scanpy<=1.9.3 for python 3.7, and scanpy includes all of what scMut requires
+
+# Alternatively, pip works
+```
 
 ## 3. Notes and Recommendations
 
-- Ensure consistent software versions across pipeline steps to avoid compatibility issues.
+- Due to the complexity of deep learning dependencies (especially `PyTorch`), we recommend installing `CUDA` and `PyTorch` first using the appropriate command for your system (CPU/GPU) before installing other packages.
+- The dependencies and installation commands provided above are minimal requirements for running the core `scMut`. The script uses an **older** version of PyTorch. In theory, PyTorch maintains backward compatibility, so you can install a PyTorch version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` works as expected. If a newer version causes incompatibilities, please downgrade accordingly. Since `MutTracer` introduces `scVI`, and `scvi-tools` has complex installation and dependency requirements, it is recommended to use a higher version of CUDA and PyTorch compatible with scVI.
+- If you wish to integrate multiple analysis modules, **we recommend either creating a new isolated environment** or installing additional packages into the existing one. However, please note that in Python versions earlier than 3.8, differences in built-in library behavior and package compatibility can lead to conflicts with dependencies installed via `conda` or `pip`. Unless constrained by PyTorch version requirements, **we strongly recommend using Python 3.8 or a newer version to minimize such issues**; otherwise, you may need to manually downgrade specific packages to resolve dependency conflicts. Additionally, be aware that certain packages are particularly prone to dependency conflicts — for example, `scikit-misc`, a key dependency of `Scanpy` to perform Seurat-style highly variable gene selection, frequently causes version incompatibilities with other tools.
+- `Scanpy` has specific Python version requirements, and automatically installed versions (by `conda`) often lead to dependency conflicts. The best approach is to check version compatibility and **manually** specify the appropriate version during installation (for example, `conda install 'scanpy<1.10'`). The same principle applies to other critical packages (such as `Cassiopeia`) as well.
+
 
 For questions, please contact.
