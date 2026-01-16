@@ -21,7 +21,7 @@ def load_scvi_model(model_path, adata=None):
     return LinearSCVI.load(model_path, adata=adata)
 
 
-def align_zxt_features(pred_dict, ref_dict, method='quantile'):
+def align_zxt_features(pred_dict=None, ref_dict=None, method='quantile'):
     """
     Align predicted auxiliary latent features to reference time-point distributions.
 
@@ -29,7 +29,8 @@ def align_zxt_features(pred_dict, ref_dict, method='quantile'):
     is applied. For unseen time points, features are aligned using temporally
     weighted interpolation from neighboring reference distributions.
     """
-
+    
+    
     aligned_dict = {}
     all_ref_times = sorted(ref_dict.keys())
     

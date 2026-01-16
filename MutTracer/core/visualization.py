@@ -62,6 +62,7 @@ def plt_set_default(font_path=None):
     mpl.rcParams['figure.figsize'] = (3, 3)
 
     logging.getLogger("fontTools").setLevel(logging.ERROR)
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
 
 def get_plot_dir(args):
@@ -714,10 +715,12 @@ def load_model_and_data(model_path, zt_path, zxt_path):
         model_dict = pickle.load(f)
     
     if isinstance(model_dict, dict):
+        # 如果是字典，遍历字典中的模型
         for key in model_dict:
             if hasattr(model_dict[key], 'eval'):
                 model_dict[key].eval()
     else:
+        # 如果不是字典，直接是模型对象
         if hasattr(model_dict, 'eval'):
             model_dict.eval()
     
@@ -755,9 +758,11 @@ def analyze_n_distribution(
     args=None
 ):
  
-    ##decoder_n = model['model_n'].model.decoder_n
-    decoder_n = model.model.decoder_n
-
+    if isinstance(model, dict):
+        decoder_n = model['model_n'].model.decoder_n
+    else:
+        decoder_n = model.model.decoder_n
+    
     _plot_real_n_umap(
         decoder_n, original_z_real_dict, 
         real_times_keep, args)
@@ -771,10 +776,10 @@ def analyze_n_distribution(
 
 def plot_distribution_comparison(
     real_dict, pred_dict, decoder_n, 
-    predict_time,  
+    predict_time=None,  
     args=None
 ):
-
+    device = next(decoder_n.parameters()).device
     if args is not None and hasattr(args, 'save_dir'):
         output_dir = os.path.join(args.save_dir, "training_plots")
     else:
@@ -783,8 +788,13 @@ def plot_distribution_comparison(
 
     plot_format = getattr(args, 'plot_format', 'pdf') if args is not None else 'pdf'
     
-    real_z = real_dict[predict_time].float().cpu()
-    pred_z = torch.tensor(pred_dict[predict_time]['zt_pred']).float().cpu()
+    real_z = real_dict[predict_time].float().to(device)
+    pred_data = pred_dict[predict_time]
+    
+    if isinstance(pred_data, dict):
+        pred_z = torch.tensor(pred_data['zt_pred']).float().to(device)
+    elif isinstance(pred_data, (np.ndarray, torch.Tensor)):
+        pred_z = torch.tensor(pred_data).float().to(device)
     
     with torch.no_grad():
         real_n = F.softplus(decoder_n(real_z)).cpu().numpy().squeeze()
@@ -815,8 +825,6 @@ def plot_distribution_comparison(
     output_path = f"{output_dir}/n_compare_t{predict_time}.{plot_format}"
     plt.savefig(output_path, format=plot_format, dpi=300)
     plt.close()
-
-    print(f"Metrics for Time {predict_time}: R²={r2:.4f}, WD={wd:.4f}")
     
     return r2, wd
 
