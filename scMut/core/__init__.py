@@ -1,5 +1,5 @@
 """
-scMut – Single-cell Mutation Inference Toolkit
+scMut – Single-Cell Mutation Parser
 
 A deep generative modeling framework for inferring cellular lineage 
 and mutation rates from sparse, noisy single-cell DNA/RNA sequencing data.
@@ -17,6 +17,9 @@ Public API:
 - Export: save_model_to_adata
 """
 
+import warnings
+from warnings import ImportWarning
+
 from .log import (
     setup_logging,
     add_file_handler,
@@ -32,6 +35,18 @@ from .data import (
     simulate_lineage_data_segment
 )
 
+__all__ = [
+    'setup_logging',
+    'add_file_handler',
+    'remove_file_handler',
+    'cleanup_logging',
+    'logger',
+    'sample_by_beta',
+    'simulate_data',
+    'simulate_lineage_data',
+    'simulate_lineage_data_segment'
+]
+
 try:
     from .utils import (
         set_seed,
@@ -46,17 +61,38 @@ try:
     from .scVI import scVIModel
     from .scMut import MutModel
     from . import test
+
+    __all__.extend([
+        'set_seed',
+        'visualize_loss',
+        'visualize_loss_k',
+        'plot_metrics',
+        'plot_latent_space',
+        'plot_regplot',
+        'AEModel',
+        'scVIModel',
+        'MutModel',
+        'test'
+    ])
     
 except Exception as e:
-    print(f'Error when import scMut: {e}')
-    print('Only funcitons from .data can be used')
+    warnings.warn(
+        f'Error when import scMut: {e}'
+        'Only functions from .data can be used',
+        ImportWarning
+    )
 
 try:
     from .export import save_model_to_adata
+
+    __all__.extend([
+        'save_model_to_adata'
+    ])
     
 except Exception as e:
-    print(f'Error when import scMut: {e}')
-    print(
+    warnings.warn(
+        f'Error when import scMut: {e}'
         "Optional dependency '.export' not loaded. "
-        "To enable AnnData export, install anndata: pip install anndata"
+        "To enable AnnData export, install anndata: pip install anndata",
+        ImportWarning
     )
