@@ -105,11 +105,6 @@ def parse_arguments():
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    time_mapping = {
-        1: 1,   
-        2: 2, 
-        3: 3,   
-    }
     results = TrainingResults()
     input_time_points = args.input_times  
     predict_time_points = args.predict_times  
@@ -125,8 +120,8 @@ def main(args):
     original_z_real_dict = dict(sorted(original_z_real_dict.items()))
     original_z_real_dict = dict(sorted(original_z_real_dict.items()))
     
-    z_real_dict = {time_mapping[k]: v for k, v in original_z_real_dict.items() if time_mapping[k] in input_time_points}
-    zxt_dict = {time_mapping[k]: v for k, v in original_zxt_dict.items() if time_mapping[k] in input_time_points}
+    z_real_dict = {k: v for k, v in original_z_real_dict.items() if k in input_time_points}
+    zxt_dict = {k: v for k, v in original_zxt_dict.items() if k in input_time_points}
     z_real_dict = {k: v.float().to(device) for k, v in z_real_dict.items()}
     zxt_dict = {k: v.float().to(device) for k, v in zxt_dict.items()}
     adapter = MaskedDimensionAdapter()
