@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muttracer"
+version = "0.1.0"
+description = "A Python package for Mutation-guided Temporal State Inference in single-cell lineage tracing."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Linnuo Pan" }
+]
+maintainers = [
+  { name = "Kaiyu Wang", email = "wangkaiyu2020@sibcb.ac.cn" },
+  { name = "Linnuo Pan", email = "panlinnuo2021@sibcb.ac.cn" }
+]
+keywords = ["single-cell", "lineage tracing", "mutation analysis", "deep-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+]
+
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn",
+    "umap-learn",
+    "matplotlib",
+    "seaborn",
+    "tqdm",
+    "anndata",
+    "torch",
+    "scanpy",
+    "scvi-tools"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["MutTracer*"]

@@ -963,8 +963,7 @@ def setup_logging(outdir, log_file="GetAF_run.log"):
     except Exception as e:
         logging.warning(f"Failed to create log file at {log_path}: {e}. Only logging to console.")
 
-def main():
-    args = parse_args()
+def main(args):
     os.makedirs(args.outdir, exist_ok=True)
     setup_logging(args.outdir, args.log_file)
 
@@ -1117,4 +1116,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args)

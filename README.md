@@ -13,19 +13,19 @@ The preprocessing module converts raw sequencing data into structured mutation p
 #### Workflow
 ```bash
 # (optional) Convert SRA to FASTQ
-bash SRAtoFastq.sh
+bash SRAtoFastq.sh --help
 
 # Fastqs to generate gene expression matrix (GEX) and BAM
-bash RunCellranger.sh 
+bash RunCellranger.sh --help
 
 # Align scRNA-seq maps using STAR
-bash RunSTAR.sh
+bash RunSTAR.sh --help
 
 # Call variants using GATK best practices
-bash RunGATK.sh
+bash RunGATK.sh --help
 
 # Extract allele frequency (AF) matrix from VCF and single-cell BAM
-python GetAF.py
+python GetAF.py --help
 
 # All scripts support --help for detailed usage instructions.
 ```
@@ -71,6 +71,7 @@ from scMut.test import run_pipe
 ### 3) MutTracer: Lineage-Aware Expression Dynamics Modeling
 
 `MutTracer` integrates inferred lineage information with gene expression to predict temporal gene expression patterns along lineages. 
+
 #### Command-Line Usage
 
 ```bash
@@ -89,8 +90,7 @@ python -m MutTracer.main \
   [--pred_times_keep <list_of_times>]
 ```
 
-
-### Parameter Descriptions
+#### Parameter Descriptions
 
 - `--model_path`  
   Path to a pre-trained MutTracer model `.pkl` file. Used to initialize the predictor weights.
@@ -128,7 +128,7 @@ python -m MutTracer.main \
 - `--pred_times_keep` (optional)  
   Subset of predicted time points to include in filtered visualizations.
 
-### Example Usage
+#### Example Usage
 
 ```bash
 python -m MutTracer.main \
@@ -170,6 +170,7 @@ To ensure reproducibility and avoid environment corruption, we provide ``env_spl
     - Dependencies:
 `sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR`, `pysam`, `pyarrow` and `pyranges` 
     - `bash=5` for `wait`'s enhanced functionality
+    - `cellranger` need to download and install by hand
     - Recommended version consistency with scripts for compatibility
 
 2) **`vaetracer_vae`** or **`vaetracer_vae_scvi`**
@@ -240,8 +241,70 @@ If you only intend to run the core `scMut` or `MutTracer` modules, please refer 
 # Alternatively, pip works
 ```
 
-## 3. Notes and Recommendations
 
+## 3. API
+
+- `preprocess` is designed for command-line usage:
+
+```bash
+# Add VAETracer/preprocess to $PATH and set script permissions, then run:
+
+RunCellranger.sh --help
+RunSTAR.sh --help
+RunGATK.sh --help
+
+# Note: 
+# All bash scripts include the WAIT_FOR_DATA parameter, allowing users to launch the scripts simultaneously even if the required input data is still being generated. 
+# The scripts will automatically wait for the data to become available before proceeding.
+
+GetAF.py --help
+```
+
+Alternatively, for GetAF.py, you can use it programmatically:
+
+```python
+from preprocess import GetAF
+
+# Define arguments manually, then call the main function
+GetAF.main(args)
+```
+
+- `scMut` is implemented as a Python API, so it can be used as follows:
+
+```python
+from VAETracer import scMut
+
+# Alternatively, if the package is not installed in the Python path:
+import sys
+sys.path.append('/path/VAETracer')
+import scMut
+
+# Note: Users can also install the package locally by running `pip install .` . in the VAETracer root directory, which allows direct imports without modifying `sys.path`.
+```
+
+- `MutTracer` is implemented in Python and provides both a command-line interface and an API for flexible usage:
+
+```bash
+# Add VAETracer to $PATH, then run:
+
+python MutTracer/main.py --help
+```
+
+It can also be used programmatically:
+
+```python
+from VAETracer import MutTracer as mt
+
+# Alternatively, if the package is not installed in the Python path:
+import sys
+sys.path.append('/path/VAETracer')
+import MutTracer as mt
+```
+
+
+## 4. Notes and Recommendations
+
+- We provide `pyproject.toml` for both `scMut` and `MutTracer`, so users can install the packages into the current Python environment via `pip install .` after properly setting up the environment.
 - Due to the complexity of deep learning dependencies (especially `PyTorch`), we recommend installing `CUDA` and `PyTorch` first using the appropriate command for your system (CPU/GPU) before installing other packages.
 - The dependencies and installation commands provided above are minimal requirements for running the core `scMut`. The script uses an **older** version of `PyTorch`. In theory, `PyTorch` maintains backward compatibility, so you can install a `PyTorch` version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` works as expected. If a newer version causes incompatibilities, please downgrade accordingly. Since `MutTracer` introduces `scVI`, and `scvi-tools` has complex installation and dependency requirements, it is recommended to use a higher version of `CUDA` and `PyTorch` compatible with `scVI`.
 - If you wish to integrate multiple analysis modules, **we recommend either creating a new isolated environment** or installing additional packages into the existing one. However, please note that in Python versions earlier than 3.8, differences in built-in library behavior and package compatibility can lead to conflicts with dependencies installed via `conda` or `pip`. Unless constrained by `PyTorch` version requirements, **we strongly recommend using Python 3.8 or a newer version to minimize such issues**; otherwise, you may need to manually downgrade specific packages to resolve dependency conflicts. Additionally, be aware that certain packages are particularly prone to dependency conflicts — for example, `scikit-misc`, a key dependency of `Scanpy` to perform Seurat-style highly variable gene selection, frequently causes version incompatibilities with other tools.
