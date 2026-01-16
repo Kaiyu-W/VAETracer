@@ -713,9 +713,13 @@ def load_model_and_data(model_path, zt_path, zxt_path):
     with open(model_path, 'rb') as f:
         model_dict = pickle.load(f)
     
-    for key in model_dict:
-        if hasattr(model_dict[key], 'eval'):
-            model_dict[key].eval()
+    if isinstance(model_dict, dict):
+        for key in model_dict:
+            if hasattr(model_dict[key], 'eval'):
+                model_dict[key].eval()
+    else:
+        if hasattr(model_dict, 'eval'):
+            model_dict.eval()
     
     original_z_real_dict = torch.load(zt_path)
     original_zxt_dict = torch.load(zxt_path)
