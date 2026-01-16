@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from .data_utils import *
 from .reconstruction import *
 from .models import *

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """
 scMut – Single-cell Mutation Inference Toolkit
 
@@ -58,4 +56,7 @@ try:
     
 except Exception as e:
     print(f'Error when import scMut: {e}')
-    print("Optional dependency '.export' not loaded. To enable AnnData export, install anndata: pip install anndata")
+    print(
+        "Optional dependency '.export' not loaded. "
+        "To enable AnnData export, install anndata: pip install anndata"
+    )
