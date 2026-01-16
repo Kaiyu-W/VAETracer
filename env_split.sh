@@ -210,12 +210,8 @@ env_create_3() {
     fi
 
     # create new environment
-    $run create -n $env_name -c conda-forge -c pytorch -c nvidia -c bioconda \
-        'python=3.11' uv gcc gxx \
-        pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 \
-        scvi-tools "jaxlib=*=*cuda*" jax \
-        pyarrow scanpy \
-        --yes 1>&2 \
+    $run create -n $env_name -c conda-forge \
+        "python=${python_version}" uv gcc gxx --yes 1>&2 \
     && $run activate $env_name || return $?
     # uv: accelerate pip
     # gcc/gxx: In case the built-in compiler is too old
