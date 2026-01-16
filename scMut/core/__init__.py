@@ -18,7 +18,6 @@ Public API:
 """
 
 import warnings
-from warnings import ImportWarning
 
 from .log import (
     setup_logging,
