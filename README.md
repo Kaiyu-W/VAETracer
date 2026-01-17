@@ -1,17 +1,121 @@
 # VAETracer
 Mutation-Guided Lineage Reconstruction and Generational State Inference from scRNA-seq
 
-VAETracer is a computational framework that integrates somatic mutation profiles with single-cell RNA equencing (scRNA-seq) data to reconstruct lineage relationships and infer generational dynamics. It consists of three modular components: `preprocess`, `scMut`, and `MutTracer`, implementing end-to-end analysis from raw sequencing data to lineage-aware expression modeling.
+VAETracer is a computational framework that integrates somatic mutation profiles with single-cell RNA sequencing (scRNA-seq) data to reconstruct lineage relationships and infer generational dynamics. It consists of three modular components: `preprocess`, `scMut`, and `MutTracer`, implementing end-to-end analysis from raw sequencing data to lineage-aware expression modeling.
 
 
-## 1. Components of VAETracer
+## 1. Environment Installation
+
+### 1. preprocess: 
+For upstream data processing (FASTQ generation, alignment, variant calling), we need to install core tools including STAR, GATK, samtools, vcftools, and Python packages pysam, pyarrow, pyranges.
+```bash
+conda create -n sc_preprocess -c conda-forge \
+    gcc gxx pigz 'bash=5' 'python=3.7' \
+    'samtools' \
+    'vcftools' \
+    'gatk4==4.2.3.0' \
+    'star==2.7.6a' \
+    'sra-tools==3.2.0' \
+    pandas pysam pyarrow pyranges
+
+conda activate sc_preprocess
+```
+
+Note:
+- To enable SRA file conversion, please also install `sra-tools`.
+- `cellranger` is required and must be downloaded and installed manually from the 10x Genomics website.
+- `bash=5` is required for enhanced functionality of the `wait` command used in workflow scripts.
+- `gcc`/`gxx`: in case the system's built-in compiler is too old
+- `pigz`: parallelly gzip/gunzip
+- We recommend **maintaining version consistency** across installations to avoid bugs caused by changes in command-line arguments or usage patterns.
+
+### 2. scMut: 
+For running scMut, only basic scientific Python packages and `PyTorch` are required.
+```bash
+# Create and activate environment
+conda create -n vaetracer python=3.11 -c conda-forge
+conda activate vaetracer
+
+# Install PyTorch (example with CUDA 12.4)
+conda install -c pytorch -c nvidia \
+    pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4
+
+# Install core dependencies
+conda install -c conda-forge numpy pandas scipy scikit-learn matplotlib seaborn tqdm anndata
+# Alternatively, you can install via scanpy (which includes most dependencies):
+conda install -c conda-forge scanpy
+
+# Alternatively, pip works
+```
+
+### 3. MutTracer: 
+To use MutTracer, which **additionally depends on `scvi-tools`**, a more specific environment with **Python 3.11+ and CUDA 12+** is required. 
+```bash
+# 1. install PyTorch, and JAX (with jaxlib) for scvi-tools (choose the correct CUDA version based on your hardware)
+# 2. install scvi-tools
+# 3. install scanpy 
+    
+# example (pytorch==2.5.1 and use cuda rather than cpu)
+conda create -n vaetracer \
+    -c conda-forge -c pytorch -c nvidia -c bioconda \
+    'python=3.11' \
+    pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 \
+    scvi-tools "jaxlib=*=*cuda*" jax \
+    scanpy
+
+# Alternatively, pip works
+```
+
+### Integrated Analysis in the Paper
+In our study, we integrated multiple analysis workflows, including single-cell RNA-seq analysis (`scanpy`), lineage tree reconstruction (`Cassiopeia`) and others. To manage complex and conflicting dependencies across these tools, we provide the script `env_split.sh`, which automatically sets up isolated Conda environments:
+
+1) **`vaetracer_vcf`**
+    - For upstream data processing (`preprocess`)
+    - Dependencies:
+`sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR`, `pysam`, `pyarrow` and `pyranges` 
+    - `cellranger` must be downloaded and installed manually
+    - Recommended version consistency with scripts for compatibility
+
+2) **`vaetracer_vae`** or **`vaetracer_vae_scvi`**
+    - For modeling and decomposition (`scMut` or/and `MutTracer`)
+    - Dependencies:
+`pytorch`, `pyarrow`, `scipy`, `scikit-learn`, `umap-learn,` `scanpy` and others (`scvi-tools`)
+    - `pyarrow` for reading output from `preprocess`
+    - `scvi-tools` is only required for `MutTracer` and is challenging to install due to numerous dependencies and strict version requirements. Therefore, users should set up the environment according to their specific needs.
+
+3) **`vaetracer_sc`**
+    - For downstream analysis with omics data
+    - Dependencies:
+`scanpy` (for single-cell analysis), `cassiopeia` (for lineage tree construction), and others
+
+This separation ensures reproducibility and flexibility, allowing users to activate the appropriate environment for each task.
+
+### Notes
+- We provide `pyproject.toml` for both `scMut` and `MutTracer`. After setting up the environment, install the package locally by running `pip install .` in each project root.
+
+- Due to strict version requirements (e.g., `scvi-tools` requires `JAX` with CUDA 12-13 and Python 3.11+), we recommend using a Python 3.11+ environment and CUDA 12+ for `MutTracer`.
+
+- Some packages, like `scikit-misc` (a scanpy dependency) and `Cassiopeia`, are prone to version conflicts. If issues arise, please refer to specific installation guides or consider manual version pinning.
+
+- In theory, all three modules can be integrated in an environment with a **newer** Python version, but maintaining separate environments offers greater **flexibility** and helps users meet specific requirements. Therefore, users are encouraged to manually create and configure environments according to their needs.
+
+
+## 2. Quick Start (Coming Soon)
+A minimal end-to-end example to help you get started with VAETracer will be provided here, including:
+- Synthetic data simulation
+- Running `scMut` for mutation matrix decomposition
+- Using `MutTracer` for lineage-aware expression prediction
+Stay tuned — this section will be updated in the next release.
+
+
+## 3. Usage of VAETracer
 
 ### 1) preprocess: Data Preprocessing Pipeline
-
 The preprocessing module converts raw sequencing data into structured mutation profiles for downstream analysis. 
-
-#### Workflow
+It is designed for command-line usage:
 ```bash
+# Add VAETracer/preprocess to $PATH, then run:
+
 # (optional) Convert SRA to FASTQ
 bash SRAtoFastq.sh --help
 
@@ -27,18 +131,25 @@ bash RunGATK.sh --help
 # Extract allele frequency (AF) matrix from VCF and single-cell BAM
 python GetAF.py --help
 
-# All scripts support --help for detailed usage instructions.
+# Note: 
+# All bash scripts include the WAIT_FOR_DATA parameter, allowing users to launch the scripts simultaneously even if the required input data is still being generated. 
+# The scripts will automatically wait for the data to become available before proceeding.
+```
+
+Alternatively, for GetAF.py, you can use it programmatically:
+```python
+from preprocess import GetAF
+
+# Define arguments manually, then call the main function
+GetAF.main(args)
 ```
 
 ### 2) scMut: Mutation Matrix Decomposition
-
 The `scMut` (single-cell Mutation Parser) module decomposes the 2D mutation profile **M** into two biologically interpretable components:
-
 - **N**: Cell generation index (lineage time)
 - **P**: Site-specific mutation rate (mutation bias)
 
 It consists of three submodules:
-
 - `NMF`: Non-negative Matrix Factorization, for initial and best decomposition (gNMF in paper)
 - `VAE`: Variational Autoencoder, with two operational modes:
   <pre>
@@ -54,8 +165,19 @@ It consists of three submodules:
   </pre>
 - `FT`: Fine-tuning module, for post-hoc refinement of N and P estimates
 
-#### Python API
+`scMut` is implemented as a Python API, so it can be used as follows:
 ```python
+# after `pip install /path/to/VAETracer/scMut` or from current directory:
+import scMut
+
+# Alternatively, if the package is not installed in PYTHONPATH:
+import sys
+sys.path.append('/path/to/VAETracer')
+import scMut
+
+# Note: Users can also install the package locally by running `pip install .` in the scMut root directory, which allows direct imports without modifying `sys.path`.
+
+# API
 # Simulate synthetic data
 from scMut import simulate_data, simulate_lineage_data, simulate_lineage_data_segment
 
@@ -69,14 +191,31 @@ from scMut.test import run_pipe
 ```
 
 ### 3) MutTracer: Lineage-Aware Expression Dynamics Modeling
-
 `MutTracer` integrates inferred lineage information with gene expression to predict temporal gene expression patterns along lineages. 
 
-#### Command-Line Usage
+`MutTracer` is implemented in Python and provides both a command-line interface and an API for flexible usage:
+```bash
+# Add VAETracer to $PYTHONPATH (export PYTHONPATH="$PYTHONPATH:/path/to/VAETracer"), then run:
+python -m MutTracer.main --help
+# or
+PYTHONPATH=/path/to/VAETracer python -m MutTracer.main --help
+```
 
+It can also be used programmatically:
+```python
+# after `pip install /path/to/VAETracer/MutTracer` or from current directory:
+import MutTracer as mt
+
+# Alternatively, if the package is not installed in PYTHONPATH:
+import sys
+sys.path.append('/path/to/VAETracer')
+import MutTracer as mt
+```
+
+#### Command-Line Usage
 ```bash
 python -m MutTracer.main \
-  --model_path <path_to_trained_model.pkl> \
+  --scmut_model_path <path_to_scmut_trained_model.pkl> \
   --zmt_path <path_to_zm_dictionary.pt> \
   --zxt_path <path_to_zx_dictionary.pt> \
   --input_times <list_of_input_timepoints> \
@@ -91,9 +230,8 @@ python -m MutTracer.main \
 ```
 
 #### Parameter Descriptions
-
-- `--model_path`  
-  Path to a pre-trained MutTracer model `.pkl` file. Used to initialize the predictor weights.
+- `--scmut_model_path`  
+  Path to a pre-trained scMut model `.pkl` file. Used to initialize the predictor weights.
 
 - `--zmt_path`  
   Path to the mutational latent representation dictionary (`Zm`) saved in `.pt` format. Typically generated by `scMut`.
@@ -129,10 +267,9 @@ python -m MutTracer.main \
   Subset of predicted time points to include in filtered visualizations.
 
 #### Example Usage
-
 ```bash
 python -m MutTracer.main \
-  --model_path ./model.pkl \
+  --scmut_model_path ./model.pkl \
   --zmt_path ./z_mt.pt \
   --zxt_path ./z_xt.pt \
   --input_times 2 3 \
@@ -145,170 +282,31 @@ python -m MutTracer.main \
   --scvi_model_path ./scvi_model.pkl \
   --save_dir ./output
 ```
+
 This command will train MutTracer using time points 2 and 3 as input, predict states for time point 1, automatically select an ancestral state, and save all results and plots to the specified save_dir.
 
 ### 4) tree_util: Lineage tree utilities
-
 Provides utility functions for lineage tree processing and format interoperability:
-
 - Converts between `Newick` string format and `CassiopeiaTree` object
 - Fixes common tree format issues to improve stability
 - Other utilities: e.g. extracts tree linkage matrix
 
 
-## 2. Environment Installation
-
-Due to complex dependency requirements across different analysis stages, such as single-cell preprocessing (`scanpy`), lineage tree reconstruction (`Cassiopeia`), statistical modeling (`statsmodels`), and gene set enrichment analysis (`gseapy`), integrating all tools into a single Conda environment is challenging. This difficulty arises from two main factors:
-
-- Divergent installation methods: Some packages (e.g., `Cassiopeia`) are only reliably installed via `pip` or `make`(direct source compilation), not through `conda`;
-- Version conflicts: Critical dependencies like `PyTorch` have strict version constraints (python or dependency version) that often clash with other ecosystem packages.
-
-To ensure reproducibility and avoid environment corruption, we provide ``env_split.sh``, a script that automatically sets up multiple isolated Conda environments (we have verified the feasibility of the versions):
-
-1) **`vaetracer_vcf`**
-    - For upstream data processing (`preprocess`)
-    - Dependencies:
-`sra-tools`, `samtools`, `vcftools`, `gatk`, `STAR`, `pysam`, `pyarrow` and `pyranges` 
-    - `bash=5` for `wait`'s enhanced functionality
-    - `cellranger` need to download and install by hand
-    - Recommended version consistency with scripts for compatibility
-
-2) **`vaetracer_vae`** or **`vaetracer_vae_scvi`**
-    - For modeling and decomposition (`scMut` or/and `MutTracer`)
-    - Dependencies:
-`pytorch`, `pyarrow`, `scipy`, `scikit-learn`, `umap-learn,` `scanpy` and others (`scvi-tools`)
-    - `pyarrow` for reading output from `preprocess`
-    - `scvi-tools` is only required for `MutTracer` and is challenging to install due to numerous dependencies and strict version requirements. Therefore, users should set up the environment according to their specific needs.
-
-3) **`vaetracer_sc`**
-    - For downstream analysis with Omics data
-    - Dependencies:
-`scanpy` (for single-cell analysis), `cassiopeia` (for lineage tree construction), and others
-
-
-We attempted to combine `preprocess` and `scMut`/`MutTracer` in a single environment, but encountered a version conflict with `jax` due to the requirements of `scvi-tools` under `Python=3.8`; we did not investigate the root cause further. However, removing `scvi-tools` resolves the conflict, indicating that `preprocess` and `scMut` can coexist in a single environment with an **older** Python version. In theory, all three modules can be integrated in an environment with a **newer** Python version, but maintaining separate environments offers greater **flexibility** and helps users meet specific requirements. Therefore, users are encouraged to manually create and configure environments according to their needs.
-
-If you only intend to run the core `scMut` or `MutTracer` modules, please refer to the dependency lists in `scMut_requirements.txt` and `MutTracer_requirements.txt`. In short, you can set up a Python environment with the following steps:
-
-```bash
-# conda environment for both MutTracer and scMut:
-
-    # 1. install PyTorch, and JAX (with jaxlib) for scvi-tools (choose the correct CUDA version based on your hardware)
-    # 2. install scvi-tools
-    # 3. install scanpy 
-    
-    # example (pytorch==2.5.1 and use cuda rather than cpu)
-        conda create -n vaetracer \
-            -c conda-forge -c pytorch -c nvidia -c bioconda \
-            'python=3.11' uv gcc gxx \
-            pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.4 \
-            scvi-tools "jaxlib=*=*cuda*" jax \
-            scanpy
-
-    # note: scvi-tools only supports cuda12-13 and python 3.11-13 (2026.1)
-
-
-# or if scvi-tools is not required (only use scMut) (Step by step):
-
-    # 1. Install PyTorch (choose the correct version based on your hardware from https://pytorch.org/)
-        
-        # example
-            # create conda env
-            conda create -n vaetracer -c conda-forge 'python=3.7' uv gcc gxx 'bash=5' 
-            # python 3.7 or 3.8 for pytorch=1.12.0
-            # uv gcc gxx bash for new version
-
-            # activate
-            conda activate vaetracer
-
-            # install pytorch of old version (<2), or other higher version
-            conda install -c pytorch -c conda-forge \
-                "pytorch==1.12.0" \
-                "torchvision==0.13.0" \
-                "torchaudio==0.12.0" \
-                "cudatoolkit=11.6" \
-                "mkl==2024.0"
-
-    # 2. Install remaining dependencies
-
-        conda install -c conda-forge \
-            numpy pandas scipy scikit-learn umap-learn matplotlib seaborn tqdm anndata
-
-        # or direct:
-        conda install -c conda-forge "scanpy<1.9.4"  
-        # scanpy<=1.9.3 for python 3.7, and scanpy includes all of what scMut requires (except pytorch)
-
-# Alternatively, pip works
-```
-
-
-## 3. API
-
-- `preprocess` is designed for command-line usage:
-
-```bash
-# Add VAETracer/preprocess to $PATH and set script permissions, then run:
-
-RunCellranger.sh --help
-RunSTAR.sh --help
-RunGATK.sh --help
-
-# Note: 
-# All bash scripts include the WAIT_FOR_DATA parameter, allowing users to launch the scripts simultaneously even if the required input data is still being generated. 
-# The scripts will automatically wait for the data to become available before proceeding.
-
-GetAF.py --help
-```
-
-Alternatively, for GetAF.py, you can use it programmatically:
-
-```python
-from preprocess import GetAF
-
-# Define arguments manually, then call the main function
-GetAF.main(args)
-```
-
-- `scMut` is implemented as a Python API, so it can be used as follows:
-
-```python
-from VAETracer import scMut
-
-# Alternatively, if the package is not installed in the Python path:
-import sys
-sys.path.append('/path/VAETracer')
-import scMut
-
-# Note: Users can also install the package locally by running `pip install .` . in the VAETracer root directory, which allows direct imports without modifying `sys.path`.
-```
-
-- `MutTracer` is implemented in Python and provides both a command-line interface and an API for flexible usage:
-
-```bash
-# Add VAETracer to $PATH, then run:
-
-python MutTracer/main.py --help
-```
-
-It can also be used programmatically:
-
-```python
-from VAETracer import MutTracer as mt
-
-# Alternatively, if the package is not installed in the Python path:
-import sys
-sys.path.append('/path/VAETracer')
-import MutTracer as mt
-```
-
-
 ## 4. Notes and Recommendations
+- Due to the complexity of deep learning dependencies (especially `PyTorch`), we recommend installing `CUDA` first using the appropriate command for your system (CPU/GPU) before installing other packages.
 
-- We provide `pyproject.toml` for both `scMut` and `MutTracer`, so users can install the packages into the current Python environment via `pip install .` after properly setting up the environment.
-- Due to the complexity of deep learning dependencies (especially `PyTorch`), we recommend installing `CUDA` and `PyTorch` first using the appropriate command for your system (CPU/GPU) before installing other packages.
-- The dependencies and installation commands provided above are minimal requirements for running the core `scMut`. The script uses an **older** version of `PyTorch`. In theory, `PyTorch` maintains backward compatibility, so you can install a `PyTorch` version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` works as expected. If a newer version causes incompatibilities, please downgrade accordingly. Since `MutTracer` introduces `scVI`, and `scvi-tools` has complex installation and dependency requirements, it is recommended to use a higher version of `CUDA` and `PyTorch` compatible with `scVI`.
-- If you wish to integrate multiple analysis modules, **we recommend either creating a new isolated environment** or installing additional packages into the existing one. However, please note that in Python versions earlier than 3.8, differences in built-in library behavior and package compatibility can lead to conflicts with dependencies installed via `conda` or `pip`. Unless constrained by `PyTorch` version requirements, **we strongly recommend using Python 3.8 or a newer version to minimize such issues**; otherwise, you may need to manually downgrade specific packages to resolve dependency conflicts. Additionally, be aware that certain packages are particularly prone to dependency conflicts — for example, `scikit-misc`, a key dependency of `Scanpy` to perform Seurat-style highly variable gene selection, frequently causes version incompatibilities with other tools.
-- `Scanpy` has specific Python version requirements, and automatically installed versions (by `conda`) often lead to dependency conflicts. The best approach is to check version compatibility and **manually** specify the appropriate version during installation (for example, `conda install 'scanpy<1.10'`). The same principle applies to other critical packages (such as `Cassiopeia`) as well.
+- In theory, `PyTorch` maintains backward compatibility, so you can install a `PyTorch` version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` works as expected. If a newer version causes incompatibilities, please downgrade accordingly.
+
+- `Scanpy` has specific Python version requirements, and automatically installed versions (by `conda`) often lead to dependency conflicts. The best approach is to check version compatibility and **manually** specify the appropriate version during installation (for example, `conda install 'scanpy<1.10'` for Python 3.8). The same principle applies to other critical packages (such as `Cassiopeia`) as well.
+
+- The dependency versions listed here are valid as of **January 2026**. Future updates to `scvi-tools` may change its installation requirements; please refer to the official documentation for the latest guidance.
+
+- All codes and scripts have been tested and verified on `Linux` systems (Ubuntu and Red-Hat distributions). Compatibility with other operating systems is not guaranteed.
+
+
+## 5. For Publication (Under Preparation)
+If you are using VAETracer in a research manuscript, please contact the authors for citation details.
+A formal citation and BibTeX entry will be available upon publication in a peer-reviewed journal.
 
 
 For questions, please contact.
