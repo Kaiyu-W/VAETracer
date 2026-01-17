@@ -100,12 +100,35 @@ This separation ensures reproducibility and flexibility, allowing users to activ
 - In theory, all three modules can be integrated in an environment with a **newer** Python version, but maintaining separate environments offers greater **flexibility** and helps users meet specific requirements. Therefore, users are encouraged to manually create and configure environments according to their needs.
 
 
-## 2. Quick Start (Coming Soon)
-A minimal end-to-end example to help you get started with VAETracer will be provided here, including:
-- Synthetic data simulation
-- Running `scMut` for mutation matrix decomposition
-- Using `MutTracer` for lineage-aware expression prediction
-Stay tuned — this section will be updated in the next release.
+## 2. Test: Validate Installation and Module Integrity
+
+To verify that `scMut` is correctly installed and all dependencies are functional, run the built-in test pipeline. This will execute a minimal synthetic experiment using the `nmf+vae+ft` workflow.
+
+```bash
+run_test() {
+    local method="$1"
+    local transpose_flag="$2"
+    local display_name="Test ${method} with train_transpose=${transpose_flag}"
+    echo "[$(date '+%H:%M:%S')] $display_name started..."
+    python << EOF && echo "[$(date '+%H:%M:%S')] $display_name over!"
+from scMut import test
+test.run_pipe(
+    run_model_method='$method',
+    n_repeat=1,
+    train_transpose=$transpose_flag,
+    beta_pairs=[(1, 32, None, None)],
+    model_params=dict(num_epochs=100, num_epochs_nmf=100, lr=1e-3, beta_kl=0.001, beta_best=0.001),
+    train_params=dict(patience=45),
+    load_params=dict(batch_size=5000, num_workers=0)
+)
+EOF
+}
+
+# run test
+run_test "nmf+vae+ft" False
+```
+If the script runs without error and outputs results to a directory like `./nmf+vae+ft_YYYYMMDD_HHMMSS/`, your installation is working properly.
+Note: This test uses synthetic data and short training epochs for speed. It does not replace analysis on real datasets.
 
 
 ## 3. Usage of VAETracer
