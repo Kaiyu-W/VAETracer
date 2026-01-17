@@ -9,7 +9,7 @@ VAETracer is a computational framework that integrates somatic mutation profiles
 ### 1. preprocess: 
 For upstream data processing (FASTQ generation, alignment, variant calling), we need to install core tools including STAR, GATK, samtools, vcftools, and Python packages pysam, pyarrow, pyranges.
 ```bash
-conda create -n sc_preprocess -c conda-forge \
+conda create -n sc_preprocess -c conda-forge -c bioconda \
     gcc gxx pigz 'bash=5' 'python=3.7' \
     'samtools' \
     'vcftools' \
