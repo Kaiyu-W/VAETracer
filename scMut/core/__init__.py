@@ -14,7 +14,7 @@ Public API:
 - Data Simulation: simulate_data, simulate_lineage_data, simulate_lineage_data_segment
 - Model Classes: AEModel, scVIModel, MutModel
 - Visualization: plot_metrics, plot_latent_space, ...
-- Export: save_model_to_adata
+- Export: save_model_to_adata, ...
 """
 
 import warnings
@@ -82,10 +82,16 @@ except Exception as e:
     )
 
 try:
-    from .export import save_model_to_adata
+    from .export import (
+        save_model_to_adata,
+        save_model_to_pickle,
+        extract_latent_mu
+    )
 
     __all__.extend([
-        'save_model_to_adata'
+        'save_model_to_adata',
+        'save_model_to_pickle',
+        'extract_latent_mu'
     ])
     
 except Exception as e:
