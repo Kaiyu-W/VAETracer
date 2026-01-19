@@ -50,8 +50,9 @@ from scMut import save_model_to_adata
 from scMut.test import run_pipe
 
 # 5. Save model for input of MutTracer
-from scMut import extract_latent_mu    # save z_m (actually mu of z)
-from scMut import save_model_to_pickle # save the whole MutModel
+from scMut import extract_latent_mu      # save z_m (actually mu of z)
+from scMut import save_model_to_pickle   # save the whole MutModel
+from scMut import load_model_from_pickle # load the whole MutModel
 
 # Use help(func) in Python to view detailed documentation for each function.
 ```
