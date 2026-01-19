@@ -43,7 +43,7 @@ from scMut import simulate_data, simulate_lineage_data, simulate_lineage_data_se
 from scMut import MutModel
 
 # 3. Save model output to AnnData
-from scMut.export import save_model_to_adata
+from scMut import save_model_to_adata
 # Packages inferred N, P, Z, etc. into an AnnData object for downstream analysis (e.g., UMAP, integration).
 
 
