@@ -1,16 +1,19 @@
+import warnings
+import pickle
 import numpy as np
 import pandas as pd
 from scipy.sparse import spmatrix, csr_matrix
 from anndata import AnnData
-from torch import Tensor
+import torch
 from .scMut import MutModel
-from .typing import Optional
+from .utils import _input_tensor
+from .typing import Optional, Dict
 
 
 def _asarray(values):
     if isinstance(values, (list, tuple, np.ndarray)):
         return np.asarray(values)
-    elif isinstance(values, Tensor):
+    elif isinstance(values, torch.Tensor):
         return values.detach().cpu().numpy()
     elif isinstance(values, (pd.DataFrame, pd.Series)):
         return values.values
@@ -197,3 +200,92 @@ def save_model_to_adata(
 
     return adata
 
+
+def save_model_to_pickle(
+    model: MutModel,
+    output_path: str
+):
+    """
+    Save a MutModel instance to disk using pickle.
+
+    Args:
+        model: Trained MutModel instance to be saved.
+        output_path: Path (str or Path) where the model will be saved.
+    
+    Note:
+        This function uses pickle which may cause compatibility issues across different Python versions or environments.
+        Users should ensure environment consistency or manually handle patches if loading fails.
+        Consider using torch.save() for better cross-version support, or save only key components (e.g., N, P, Z).
+        Storing minimal state (rather than full model) is recommended for long-term reproducibility — a maybe future TODO.
+
+    Example:
+        save_model_to_pickle(model_n, "model_n.pkl")
+    """
+
+    try:
+        with open(output_path, 'wb') as f:
+            pickle.dump(model, f, protocol=4)
+
+    except Exception as e:
+        warnings.warn(f"Failed to save model to {output_path}:\n{e}")
+        raise
+
+
+def extract_latent_mu(
+    model: MutModel,
+    index_map: Dict[int, tuple],
+    X: Optional[torch.Tensor] = None,
+    device: Optional[torch.device] = None,
+    dtype: Optional[torch.dtype] = None,
+    train_np: bool = True,
+    output_path: Optional[str] = None,
+) -> Dict[int, torch.Tensor]:
+    """
+    Extract latent space mean (mu) from a MutModel for each group defined by index_map.
+
+    Args:
+        model: Trained MutModel instance.
+        index_map: Mapping from group key (e.g., time point t) to (start_idx, end_idx).
+        X: Optional input tensor; if None, uses `model.X`. [default: None]
+        device: Device to run inference on; defaults to model.device. [default: None]
+        dtype: Data type for tensor; defaults to model.dtype. [default: None]
+        train_np: Whether to enable NP module during forward pass. [default: True]
+        output_path: Optional path to save the result via torch.save. [default: None]
+
+    Returns:
+        Dictionary mapping group key to latent mu tensor (on CPU).
+
+    Example:
+        z_dict = extract_latent_mu(
+            model=mut_model,
+            index_map=index_map,
+            output_path="z_real_dict.pt"
+        )
+    """
+    z_real_dict = {}
+
+    # Prepare input tensor
+    X_input = _input_tensor(
+        model.X if X is None else X,
+        device=model.device if device is None else device,
+        dtype=model.dtype if dtype is None else dtype
+    )
+
+    model.model.eval()
+    with torch.no_grad():
+        for t in sorted(index_map.keys()):
+            start, end = index_map[t]
+            X_t = X_input[start:end]
+
+            outs = model.model(X_t, train_np=train_np)
+            mu = outs[2]  # Latent mu from VAE output
+            z_real_dict[t] = mu.cpu()
+
+    # Save if requested
+    if output_path is not None:
+        try:
+            torch.save(z_real_dict, output_path)
+        except Exception as e:
+            warnings.warn(f"Failed to save z_real_dict to {output_path}:\n{e}")
+
+    return z_real_dict
