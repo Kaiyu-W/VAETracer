@@ -204,7 +204,7 @@ def save_model_to_adata(
 def save_model_to_pickle(
     model: MutModel,
     output_path: str
-):
+) -> None:
     """
     Save a MutModel instance to disk using pickle.
 
@@ -228,6 +228,29 @@ def save_model_to_pickle(
 
     except Exception as e:
         warnings.warn(f"Failed to save model to {output_path}:\n{e}")
+        raise
+
+
+def load_model_from_pickle(input_path: str) -> MutModel:
+    """
+    Load a MutModel instance from disk using pickle.
+
+    Args:
+        input_path: Path (str) to the saved .pkl file.
+
+    Returns:
+        Loaded MutModel instance.
+
+    Example:
+        model_n = load_model_from_pickle("model_n.pkl")
+    """
+    try:
+        with open(input_path, 'rb') as f:
+            model = pickle.load(f)
+        return model
+
+    except Exception as e:
+        warnings.warn(f"Failed to load model from {input_path}:\n{e}")
         raise
 
 
