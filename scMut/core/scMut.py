@@ -335,6 +335,7 @@ def decompose_R_to_np(
 
 
 # bayesian R
+# to do: correct
 def compute_posterior(
     r: np.ndarray,
     r0: float,
@@ -2013,6 +2014,7 @@ class MutModel(AutoEncoderModel):
 
         return R
 
+    # to do: correct
     def posterior_X(
         self,
         n: np.ndarray,
