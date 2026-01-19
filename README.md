@@ -207,8 +207,10 @@ from scMut import simulate_data, simulate_lineage_data, simulate_lineage_data_se
 # Core model class
 from scMut import MutModel
 
-# Save MutModel output to AnnData
-from scMut import save_model_to_adata
+# Save MutModel
+from scMut import save_model_to_adata  # save output by AnnData
+from scMut import save_model_to_pickle # save the whole MutModel
+from scMut import extract_latent_mu    # save z_m (actually mu of z)
 
 # Run test pipeline
 from scMut.test import run_pipe
