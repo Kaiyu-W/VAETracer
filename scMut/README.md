@@ -42,7 +42,12 @@ from scMut import simulate_data, simulate_lineage_data, simulate_lineage_data_se
 # 2. Core model class
 from scMut import MutModel
 
-# 3. Test pipeline
+# 3. Save model output to AnnData
+from scMut.export import save_model_to_adata
+# Packages inferred N, P, Z, etc. into an AnnData object for downstream analysis (e.g., UMAP, integration).
+
+
+# 4. Test pipeline
 from scMut.test import run_pipe
 
 # Use help(func) in Python to view detailed documentation for each function.
