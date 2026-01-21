@@ -1,4 +1,4 @@
-# preprocess: Upstream Preprocessing Pipeline for 10X Single-Cell RNA-Seq Data
+# preprocess:
 
 This suite of Bash and Python scripts provides a complete upstream pipeline for processing **10X Genomics single-cell RNA-seq data**, enabling both gene expression (GEX) profiling and mutation-aware analysis through allele frequency (AF) matrix generation.
 
@@ -109,6 +109,7 @@ bash RunGATK.sh \
 
 # Notes:
 #   - Make sure the output directory structure matches that of RunSTAR.
+#   - --KNOWNs(-k) supports multiple files, separated by commas (e.g., file1.vcf.gz,file2.vcf.gz).
 #   - For mouse: use chr{1..19},chrX,chrY,chrM; for human: use chr{1..22},chrX,chrY,chrM.
 #   - For single-sample calling, set `-m single`.
 #   - Joint mode outputs: vcf_out/merge09maf05.recode.vcf.gz
@@ -159,11 +160,11 @@ python3 GetAF.py \
 
 The treatment of multiple sequencing batches differs across scripts due to tool capabilities and design goals:
 
-**RunCellranger.sh**:
+- **RunCellranger.sh**:
    CellRanger natively supports multi-lane aggregation by automatically grouping FASTQs with the same sample name (`{sample}`). Therefore, you can directly place multi-batch data in `FASTQ_DIR`, and CellRanger will merge them during processing.
    - Supported out-of-the-box.
 
-**RunSTAR.sh**:
+- **RunSTAR.sh**:
    Although STAR itself supports multiple input files via `--readFilesIn`, this script is designed for simplicity and consistency within the pipeline. It expects a single pair of FASTQs per sample.
    - Recommended workaround: Manually merge R1 and/or R2 files across lanes before running the script.
    - Advanced option (not recommended): You may modify the script to pass multiple FASTQ paths to `--readFilesIn`. This avoids the time and memory cost of pre-merging large FASTQ files but sacrifices portability and increases complexity.
