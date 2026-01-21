@@ -3,7 +3,7 @@
 
 ***VAETracer*** is a computational framework that integrates somatic mutation profiles with single-cell RNA sequencing (scRNA-seq) data to reconstruct lineage relationships and infer generational dynamics. It consists of three modular components: `preprocess`, `scMut`, and `MutTracer`, implementing end-to-end analysis from raw sequencing data to lineage-aware expression modeling.
 
-![VAETracer Pipeline Workflow](docs/pipeline_workflow.jpg "Data flow from raw sequencing to lineage-aware modeling")
+![pipeline](docs/pipeline_workflow.jpg)
 
 ## 1. Environment Installation
 
