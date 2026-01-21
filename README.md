@@ -142,6 +142,8 @@ We provide a high-level command-line interface, `preprocess10X`, to streamline t
 
 #### Recommended Usage: `preprocess10X`
 ```bash
+# Add VAETracer/ to $PATH and chmod u+x VAETracer/preprocess10X, then run:
+
 # Show help for the main command
 preprocess10X --help
 
