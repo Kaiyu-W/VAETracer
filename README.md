@@ -135,7 +135,28 @@ Note: This test uses synthetic data and short training epochs for speed. It does
 
 ### 1) preprocess: Data Preprocessing Pipeline
 The preprocessing module converts raw sequencing data into structured mutation profiles for downstream analysis. 
-It is designed for command-line usage:
+
+We provide a high-level command-line interface, `preprocess10X`, to streamline the execution of preprocessing steps. This wrapper script acts as a unified dispatcher for all individual tools, ensuring consistent parameter formatting and simplifying workflow management.
+
+> **Note**: Please ensure that the `preprocess/` directory and the `preprocess10X` script reside **in the same parent directory**.
+
+#### Recommended Usage: `preprocess10X`
+```bash
+# Show help for the main command
+preprocess10X --help
+
+# Show help for a specific subcommand
+preprocess10X <subcommands> --help
+
+# Example subcommands:
+preprocess10X SRAtoFastq --help
+preprocess10X RunCellranger --help
+preprocess10X RunSTAR --help
+preprocess10X RunGATK --help
+preprocess10X GetAF --help
+```
+
+Alternatively, you can directly invoke the individual Bash/Python scripts located in the `preprocess/`:
 ```bash
 # Add VAETracer/preprocess to $PATH, then run:
 
@@ -159,7 +180,7 @@ python GetAF.py --help
 # The scripts will automatically wait for the data to become available before proceeding.
 ```
 
-Alternatively, for GetAF.py, you can use it programmatically:
+You can also use `GetAF.py` programmatically in Python:
 ```python
 from preprocess import GetAF
 
