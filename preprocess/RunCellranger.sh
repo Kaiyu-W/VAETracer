@@ -66,11 +66,11 @@ Help() {
     cat >&2 << EOF
 Usage: RunCellranger.sh [options]
 Options:
-  --SAMPLE_LIST,-i <string>   Set sample groups (space-separated string)
+  --SAMPLE_LIST,-i <string>   Set sample groups (comma-separated string, e.g., "S1,S2,S3")
   --OUTPUT_DIR,-o <dir>       Set output directory
   --FASTQ_DIR,-f <dir>        Set fastq input directory
   --REF_DIR,-r <dir>          Set cellranger reference
-  --REF_FASTA,-a <dir>        Set reference fasta
+  --REF_FASTA,-a <dir>        [optional] Set reference fasta (if REF_DIR not exist)
   --REF_GTF,-g <dir>          [optional] Set reference gtf (if REF_DIR not exist)
   --THREADS,-t <int>          [optional] Set total cpu cores (default: $(nproc))
   --TASK_THREADS,-T <int>     [optional] Set single task cores (default: 9)
@@ -81,7 +81,7 @@ Options:
   --help, -h                  Show this help message
 
 Example:
-  RunCellranger -i "LM0-RNA 100k-RNA" \\
+  RunCellranger -i "LM0-RNA,100k-RNA" \\
                 -f ./fastq_dir \\
                 -r /path/to/refdata-gex-GRCh38-2020-A \\
                 -o ./output_dir \\
@@ -112,7 +112,7 @@ while true; do
     case "$1" in
         --CELLRANGER ) CELLRANGER="$2"; shift 2 ;;
         --CELLRANGER_OPTIONS ) CELLRANGER_OPTIONS="$2"; shift 2 ;;
-        --SAMPLE_LIST | -i ) SAMPLE_LIST="$2"; shift 2 ;;
+        --SAMPLE_LIST | -i ) SAMPLE_LIST="${2//,/ }"; shift 2 ;;
         --OUTPUT_DIR | -o ) OUTPUT_DIR="$2"; shift 2 ;;
         --FASTQ_DIR | -f ) FASTQ_DIR="$2"; shift 2 ;;
         --REF_DIR | -r ) REF_DIR="$2"; shift 2 ;;
@@ -129,14 +129,13 @@ done
 
 CmdCheck $CELLRANGER
 CmdCheck pigz
-args_char="SAMPLE_LIST OUTPUT_DIR FASTQ_DIR REF_DIR REF_FASTA"
+args_char="SAMPLE_LIST OUTPUT_DIR FASTQ_DIR REF_DIR"
 args_empty=""
 for arg in $args_char; do [ -z "$(CharGetVar $arg)" ] && args_empty="${args_empty} --$arg"; done
 [ -n "$args_empty" ] && Help && echoError "You must specify$args_empty"
 (( TASK_THREADS >= THREADS )) && TASK_THREADS=$THREADS
 
 DirCheck "$FASTQ_DIR"
-FileCheck "$REF_FASTA"
 REF_FASTA=$(FileAbspath $REF_FASTA)
 REF_GTF=$(FileAbspath $REF_GTF)
 REF_DIR=$(DirAbspath $REF_DIR)
@@ -147,6 +146,7 @@ OUTPUT_DIR=$(DirAbspath $OUTPUT_DIR)
 
 # cellranger index
 if [ ! -d "$REF_DIR" ] || [ -z "$(ls -A "$REF_DIR")" ]; then
+    FileCheck "$REF_FASTA"
     FileCheck "$REF_GTF"
     mkdir -p $REF_DIR
     REF_FASTA_TMP=$OUTPUT_DIR/ref_tmp.fa

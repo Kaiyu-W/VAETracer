@@ -99,10 +99,10 @@ Help() {
     cat >&2 << EOF
 Usage: RunGATK.sh [options]
 Options:
-  --SAMPLE_LIST,-i <string>   Set sample groups (space-separated string)
+  --SAMPLE_LIST,-i <string>   Set sample groups (comma-separated string, e.g., "S1,S2,S3")
   --OUTPUT_DIR,-o <dir>       Set output directory
   --REF_FASTA,-a <dir>        Set reference fasta
-  --KNOWNs,-k <vcf>           Set known sites vcf (space-separated string if multiple ones)
+  --KNOWNs,-k <vcf>           Set known sites vcf (comma-separated string if multiple ones)
   --CALL_MODE,-m <string>     [optional] Set calling mode: 'joint' (default) or 'single'.
   --THREADS,-t <int>          [optional] Set total cpu cores (default: $(nproc))
   --TASK_THREADS,-T <int>     [optional] Set single task cores (default: 9)
@@ -110,7 +110,7 @@ Options:
   --CLEAN,-c                  [optional] Clean the temporary result files.
   --Xmx <int+g>               [optional] Max memory for JVM. (default: 32g)
   --GATK4_JAVA_OPTS <string>  [optional] Options for JVM-GATK4. (default: set parallelism to maximum available CPU threads)
-  --CHR_LIST <string>         [optional] Set chromosome groups (space-separated string) (default: chr1-19+X/Y/M for mouse)
+  --CHR_LIST <string>         [optional] Set chromosome groups (comma-separated string) (default: chr1-19+X/Y/M for mouse)
   --GATK4[=<path>]            [optional] Set GATK4 executable path/alias. (default: gatk)
   --SAMTOOLS[=<path>]         [optional] Set SAMTOOLS executable path/alias. (default: samtools)
   --VCFTOOLS[=<path>]         [optional] Set VCFTOOLS executable path/alias. (default: vcftools)
@@ -119,7 +119,7 @@ EOF
 }
 
 SAMPLE_LIST=""
-CHR_LIST=$(eval echo "chr{1..19} chrX chrY chrM")
+CHR_LIST=$(eval echo "chr{1..19} chrX chrY chrM") # 1..22 for human
 GATK4=gatk
 SAMTOOLS=samtools
 VCFTOOLS=vcftools
@@ -147,10 +147,10 @@ while true; do
         --GATK4 ) GATK4="$2"; shift 2 ;;
         --SAMTOOLS ) SAMTOOLS="$2"; shift 2 ;;
         --VCFTOOLS ) VCFTOOLS="$2"; shift 2 ;;
-        --SAMPLE_LIST | -i ) SAMPLE_LIST="$2"; shift 2 ;;
+        --SAMPLE_LIST | -i ) SAMPLE_LIST="${2//,/ }"; shift 2 ;;
         --OUTPUT_DIR | -o ) OUTPUT_DIR="$2"; shift 2 ;;
         --REF_FASTA | -a ) REF_FASTA="$2"; shift 2 ;;
-        --KNOWNs | -k ) KNOWNs="$2"; shift 2 ;;
+        --KNOWNs | -k ) KNOWNs="${2//,/ }"; shift 2 ;;
         --CALL_MODE | -m ) CALL_MODE="$2"; shift 2 ;;
         --THREADS | -t ) THREADS="$2"; shift 2 ;;
         --TASK_THREADS | -T ) TASK_THREADS="$2"; shift 2 ;;
@@ -158,7 +158,7 @@ while true; do
         --CLEAN | -c ) CLEAN=1; shift ;;
         --Xmx ) Xmx="$2"; shift 2 ;;
         --GATK4_JAVA_OPTS ) GATK4_JAVA_OPTS="$2"; shift 2 ;;
-        --CHR_LIST ) CHR_LIST="$2"; shift 2 ;;
+        --CHR_LIST ) CHR_LIST="${2//,/ }"; shift 2 ;;
         --help | -h ) Help; exit 0 ;;
         -- ) shift; break ;;
         * ) Help; exit 1 ;;

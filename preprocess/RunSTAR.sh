@@ -86,7 +86,7 @@ Help() {
     cat >&2 << EOF
 Usage: RunSTAR.sh [options]
 Options:
-  --SAMPLE_LIST,-i <string>   Set sample groups (space-separated string)
+  --SAMPLE_LIST,-i <string>   Set sample groups (comma-separated string, e.g., "S1,S2,S3")
   --OUTPUT_DIR,-o <dir>       Set output directory
   --FASTQ_DIR,-f <dir>        Set fastq input directory
   --REF_DIR,-r <dir>          Set STAR genome directory
@@ -133,7 +133,7 @@ while true; do
         --STAR ) STAR="$2"; shift 2 ;;
         --STAR_OPTIONS ) STAR_OPTIONS="$2"; shift 2 ;;
         --SAMTOOLS ) SAMTOOLS="$2"; shift 2 ;;
-        --SAMPLE_LIST | -i ) SAMPLE_LIST="$2"; shift 2 ;;
+        --SAMPLE_LIST | -i ) SAMPLE_LIST="${2//,/ }"; shift 2 ;;
         --OUTPUT_DIR | -o ) OUTPUT_DIR="$2"; shift 2 ;;
         --FASTQ_DIR | -f ) FASTQ_DIR="$2"; shift 2 ;;
         --REF_DIR | -r ) REF_DIR="$2"; shift 2 ;;
