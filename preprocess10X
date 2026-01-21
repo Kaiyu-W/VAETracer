@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PREPROCESS_DIR="$SCRIPT_DIR/preprocess"
+SUBCMDS=(
+    RunSTAR
+    RunGATK
+    RunCellranger
+    SRAtoFastq
+    GetAF
+)
+declare -A SCRIPT_MAP=(
+    ["RunSTAR"]="$PREPROCESS_DIR/RunSTAR.sh"
+    ["RunGATK"]="$PREPROCESS_DIR/RunGATK.sh"
+    ["RunCellranger"]="$PREPROCESS_DIR/RunCellranger.sh"
+    ["SRAtoFastq"]="$PREPROCESS_DIR/SRAtoFastq"
+    ["GetAF"]="$PREPROCESS_DIR/GetAF.py"
+)
+declare -A INTERPRETER_MAP=(
+    ["RunSTAR"]="bash"
+    ["RunGATK"]="bash"
+    ["RunCellranger"]="bash"
+    ["SRAtoFastq"]="bash"
+    ["GetAF"]="python3" # better than python
+)
+
+# === Functions ===
+print_main_help() {
+    local script_name=$(basename "${BASH_SOURCE[0]}")
+    cat << EOF
+Usage: $script_name <subcommand> [options]
+
+High-level wrapper for single-cell preprocessing pipelines.
+
+Available subcommands:
+EOF
+
+    for cmd in "${SUBCMDS[@]}"; do
+        echo "  $cmd"
+    done
+
+    cat << EOF
+
+Use '$script_name <subcommand> --help' to see detailed options for each command.
+
+Example workflow:
+  # Step 0: Convert SRA files (optional)
+  declare -A SAMPLE_GROUPS=(
+      ["LM0-RNA"]="SRR13045969 SRR13045970"
+      ["100k-RNA"]="SRR13045939 SRR13045940"
+  )
+  $script_name SRAtoFastq \\
+      --SAMPLE_GROUPS "\$(declare -p SAMPLE_GROUPS)" \\
+      --OUTPUT_DIR fastq_dir/ \\
+      --WAIT_FOR_DATA
+
+  SAMPLE_LIST="LM0-RNA,100k-RNA"
+  # Step 1: Generate GEX with CellRanger
+  $script_name RunCellranger \\
+      --SAMPLE_LIST \$SAMPLE_LIST \\
+      --FASTQ_DIR fastq_dir/ \\
+      --REF_DIR /path/to/refdata-gex-GRCh38-2020-A \\
+      --OUTPUT_DIR cr_out/
+
+  # Step 2: Align with STAR
+  $script_name RunSTAR \\
+      --SAMPLE_LIST \$SAMPLE_LIST \\
+      --FASTQ_DIR fastq_dir/ \\
+      --OUTPUT_DIR vcf_out/ \\
+      --REF_DIR star_ref/ \\
+      --REF_FASTA /path/to/genome.fa \\
+      --REF_GTF /path/to/genes.gtf
+
+  # Step 3: Variant calling with GATK
+  $script_name RunGATK \\
+      --SAMPLE_LIST \$SAMPLE_LIST \\
+      --OUTPUT_DIR vcf_out/ \\
+      --REF_FASTA /path/to/genome.fa \\
+      --KNOWNs /path/to/known.vcf.gz \\
+      --CHR_LIST \$(echo chr{1..22} chrX chrY chrM | tr ' ' ',') \\
+      --CALL_MODE joint
+
+  # Step 4: Extract AF matrix
+  BAMs="cr_out/LM0-RNA/outs/possorted_genome_bam.bam,LM0-RNA;cr_out/100k-RNA/outs/possorted_genome_bam.bam,100k-RNA"
+  VCFs=vcf_out/merge09maf05.recode.vcf.gz
+  $script_name GetAF \\
+      --bams \$BAMs \\
+      --vcfs \$VCFs \\
+      --outdir af_out/ \\
+      --gtf /path/to/genes.gtf \\
+      --processes \$(nproc)
+
+Note:
+- All multi-sample parameters use comma-separated strings (e.g., --SAMPLE_LIST).
+- Use '\$(nproc)' to auto-detect CPU cores.
+- WAIT_FOR_DATA supports processing data while it is being generated (e.g., during downloading sequencing output).
+- TASK_THREADS allows setting the number of CPU cores allocated per individual task, enabling fine-grained control over resource usage.
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+    print_main_help
+    exit 0
+fi
+
+FIRST_ARG="$1"
+
+if [[ "$FIRST_ARG" == "--help" || "$FIRST_ARG" == "-h" ]]; then
+    print_main_help
+    exit 0
+fi
+
+# Check if it's a valid subcommand
+if printf '%s\n' "${SUBCMDS[@]}" | grep -qx "$FIRST_ARG"; then
+    SUBCMD="$FIRST_ARG"
+    shift
+
+    SCRIPT_PATH="${SCRIPT_MAP[$SUBCMD]}"
+    INTERP="${INTERPRETER_MAP[$SUBCMD]}"
+
+    # check
+    [[ -f "$SCRIPT_PATH" ]] && [[ -r "$SCRIPT_PATH" ]] || {
+        echo "Error: Script not found or not readable: $SCRIPT_PATH" >&2
+        exit 1
+    }
+    command -v "$INTERP" >/dev/null 2>&1 || {
+        echo "Error: Interpreter not found: $INTERP" >&2
+        exit 1
+    }
+
+    # run
+    exec "$INTERP" "$SCRIPT_PATH" "$@"
+
+else
+    echo "Error: Unknown subcommand '$FIRST_ARG'" >&2
+    print_main_help
+    exit 1
+fi
