@@ -361,7 +361,7 @@ Provides utility functions for lineage tree processing and format interoperabili
 
 The following publications describe the methods and applications of VAETracer. Please cite the relevant work when using this tool in your research.
 
-- **Pan, L., Wang, K.*, Chen, L.** bioRxiv (2026)  
+- **Pan, L.\*, Wang, K.\*, Chen, L.** bioRxiv (2026)  
   *VAETracer: Mutation-Guided Lineage Reconstruction and Generational State Inference from scRNA-seq*  
   DOI: [10.64898/2026.01.19.700238](https://www.biorxiv.org/content/10.64898/2026.01.19.700238v1)  
 
