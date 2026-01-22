@@ -357,9 +357,13 @@ Provides utility functions for lineage tree processing and format interoperabili
 - All codes and scripts have been tested and verified on `Linux` systems (Ubuntu and Red-Hat distributions). Compatibility with other operating systems is not guaranteed.
 
 
-## 5. For Publication (Under Preparation)
-If you are using VAETracer in a research manuscript, please contact the authors for citation details.
-A formal citation and BibTeX entry will be available upon publication in a peer-reviewed journal.
+## 5. Papers & Citations
+
+The following publications describe the methods and applications of VAETracer. Please cite the relevant work when using this tool in your research.
+
+- **Pan, L., Wang, K.*, Chen, L.** bioRxiv (2026)  
+  *VAETracer: Mutation-Guided Lineage Reconstruction and Generational State Inference from scRNA-seq*  
+  DOI: [10.64898/2026.01.19.700238](https://www.biorxiv.org/content/10.64898/2026.01.19.700238v1)  
 
 
 For questions, please contact.
