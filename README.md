@@ -103,8 +103,9 @@ This separation ensures reproducibility and flexibility, allowing users to activ
 
 ## 2. Test: Validate Installation and Module Integrity
 
-To verify that `scMut` is correctly installed and all dependencies are functional, run the built-in test pipeline. This will execute a minimal synthetic experiment using the `nmf+vae+ft` workflow.
+### 1) scMut:
 
+To verify that `scMut` is correctly installed and all dependencies are functional, run the built-in test pipeline. Here shows an example:
 ```bash
 run_test() {
     local method="$1"
@@ -116,11 +117,14 @@ from scMut import test
 test.run_pipe(
     run_model_method='$method',
     n_repeat=1,
+    n_cells=100,
+    n_sites=100,
     train_transpose=$transpose_flag,
     beta_pairs=[(1, 32, None, None)],
-    model_params=dict(num_epochs=100, num_epochs_nmf=100, lr=1e-3, beta_kl=0.001, beta_best=0.001),
+    model_params=dict(num_epochs=1000, num_epochs_nmf=1000, lr=1e-3, beta_kl=0.001, beta_best=0.001),
     train_params=dict(patience=45),
-    load_params=dict(batch_size=5000, num_workers=0)
+    load_params=dict(batch_size=5000, num_workers=0),
+    cpu_time=False
 )
 EOF
 }
@@ -128,8 +132,87 @@ EOF
 # run test
 run_test "nmf+vae+ft" False
 ```
-If the script runs without error and outputs results to a directory like `./nmf+vae+ft_YYYYMMDD_HHMMSS/`, your installation is working properly.
-Note: This test uses synthetic data and short training epochs for speed. It does not replace analysis on real datasets.
+
+**Note**:
+- The pipeline runs three sequential models: **NMF -> VAE -> FT**
+- It processes two data types: `simple` and `lineage`. 
+- If the script runs without error and outputs results to a directory like `./nmf+vae+ft_YYYYMMDD_HHMMSS/`, your installation works properly. 
+
+More details for scipt and results of this example are saved in the `demo/scMut/` folder. Below is an log from a successful execution:
+```text
+[16:37:27] Test nmf+vae+ft with train_transpose=False started...
+2026-02-11 16:37:32,557 - INFO - (Import) Set NUMEXPR_MAX_THREADS to 15.
+2026-02-11 16:37:33,033 - INFO - (Import) Use cuda as default device!
+2026-02-11 16:37:33,101 - INFO - Set save_dir as: /path/to/VAETracer/demo/scMut/nmf+vae+ft_20260211_163733
+2026-02-11 16:37:33,101 - INFO - Logging configured. Logs will be saved to /path/to/VAETracer/demo/scMut/nmf+vae+ft_20260211_163733/run.log
+2026-02-11 16:37:33,102 - INFO - Now run simple data...
+2026-02-11 16:37:33,102 - INFO - Now run simple data, 0:(1, 32, None, None) seed=1
+2026-02-11 16:37:33,102 - INFO - Set save_dir as: /path/to/VAETracer/demo/scMut/nmf+vae+ft_20260211_163733/simple/0_1
+2026-02-11 16:37:34,243 - INFO - Now run nmf...
+train epoch: 100%|█████████████████████████| 1000/1000 [00:04<00:00, 237.19it/s]
+2026-02-11 16:37:39,296 - INFO - Now run vae...
+2026-02-11 16:37:39,297 - INFO - Now run vae-mode1-np...
+train epoch:  14%|███▋                       | 137/1000 [00:01<00:12, 69.14it/s]
+2026-02-11 16:37:41,279 - INFO - Early stopping at epoch 137
+2026-02-11 16:37:41,280 - INFO - Restored best model from epoch 92
+2026-02-11 16:37:41,492 - INFO - Now run vae-mode1-xhat...
+train epoch:  23%|█████▉                    | 228/1000 [00:00<00:03, 245.79it/s]
+2026-02-11 16:37:42,421 - INFO - Early stopping at epoch 228
+2026-02-11 16:37:42,422 - INFO - Restored best model from epoch 183
+2026-02-11 16:37:47,670 - INFO - Now represent Z by tSNE & UMAP...
+2026-02-11 16:37:53,485 - INFO - Now run ft...
+2026-02-11 16:37:54,331 - INFO - Finished! Get finetuned N by attribute .N_ft.
+train epoch: 100%|█████████████████████████| 1000/1000 [00:06<00:00, 154.38it/s]
+2026-02-11 16:38:00,809 - INFO - Finished! Get finetuned P by attribute .P_ft.
+2026-02-11 16:38:02,187 - INFO - Done by 0h 0m27s
+2026-02-11 16:38:05,802 - INFO - Statistics: {...}
+2026-02-11 16:38:05,803 - INFO - Now run lineage data...
+2026-02-11 16:38:05,803 - INFO - Now run lineage data, 0:(1, 32, None, None) seed=1
+2026-02-11 16:38:05,803 - INFO - Set save_dir as: /path/to/VAETracer/demo/scMut/nmf+vae+ft_20260211_163733/lineage/0_1
+2026-02-11 16:38:09,677 - INFO - Now run nmf...
+train epoch: 100%|█████████████████████████| 1000/1000 [00:04<00:00, 213.01it/s]
+2026-02-11 16:38:14,846 - INFO - Now run vae...
+2026-02-11 16:38:14,846 - INFO - Now run vae-mode1-np...
+train epoch:  21%|█████▊                     | 214/1000 [00:02<00:08, 96.62it/s]
+2026-02-11 16:38:17,062 - INFO - Early stopping at epoch 214
+2026-02-11 16:38:17,063 - INFO - Restored best model from epoch 169
+2026-02-11 16:38:17,388 - INFO - Now run vae-mode1-xhat...
+train epoch:  20%|█████▎                    | 204/1000 [00:01<00:04, 179.67it/s]
+2026-02-11 16:38:18,525 - INFO - Early stopping at epoch 204
+2026-02-11 16:38:18,527 - INFO - Restored best model from epoch 159
+2026-02-11 16:38:23,430 - INFO - Now represent Z by tSNE & UMAP...
+2026-02-11 16:38:25,087 - INFO - Now run ft...
+2026-02-11 16:38:25,126 - INFO - Finished! Get finetuned N by attribute .N_ft.
+train epoch: 100%|█████████████████████████| 1000/1000 [00:06<00:00, 154.41it/s]
+2026-02-11 16:38:31,603 - INFO - Finished! Get finetuned P by attribute .P_ft.
+2026-02-11 16:38:32,580 - INFO - Done by 0h 0m22s
+2026-02-11 16:38:36,027 - INFO - Statistics: {...}
+2026-02-11 16:38:36,028 - INFO - Now save all results into /path/to/VAETracer/demo/scMut/nmf+vae+ft_20260211_163733/result.pkl...
+[16:38:37] Test nmf+vae+ft with train_transpose=False over!
+```
+
+**Runtime Performance**:
+
+The following table summarizes average wall-clock execution times or speed across different data scales:
+|   scale   |    NMF    |    VAE    | (NMF)->FT | (VAE)->FT |
+|-----------|-----------|-----------|-----------|-----------|
+|   0.1k    |           |           |           |           |
+|     1k    |           |           |           |           |
+|    10k    |           |           |           |           |
+
+These benchmarks were obtained on a standard workstation with:
+- OS: Ubuntu 22.04.5 LTS (x86_64)
+- CPU: Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+  - Enabled: 8 physical cores, 16 logical threads (Hyper-Threading)
+- Memory: 128 GB DDR4 RAM
+- GPU: NVIDIA GeForce GTX 1080 Ti (11,264 MiB GDDR5X)
+  - Driver Version: 550.144.03
+  - CUDA Version: 12.4
+- Conditions: up to 1000 training epochs, 1000 minibatch size, 3 random repeats per configuration
+- 10k only use `simple` data, because binary lineage data is hard to generate for so many cells
+
+### 2) MutTracer:
+*To be added* 
 
 
 ## 3. Usage of VAETracer
@@ -357,13 +440,9 @@ Provides utility functions for lineage tree processing and format interoperabili
 - All codes and scripts have been tested and verified on `Linux` systems (Ubuntu and Red-Hat distributions). Compatibility with other operating systems is not guaranteed.
 
 
-## 5. Papers & Citations
-
-The following publications describe the methods and applications of VAETracer. Please cite the relevant work when using this tool in your research.
-
-- **Pan, L.\*, Wang, K.\*, Chen, L.** bioRxiv (2026)  
-  *VAETracer: Mutation-Guided Lineage Reconstruction and Generational State Inference from scRNA-seq*  
-  DOI: [10.64898/2026.01.19.700238](https://www.biorxiv.org/content/10.64898/2026.01.19.700238v1)  
+## 5. For Publication (Under Preparation)
+If you are using VAETracer in a research manuscript, please contact the authors for citation details.
+A formal citation and BibTeX entry will be available upon publication in a peer-reviewed journal.
 
 
 For questions, please contact.
