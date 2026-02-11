@@ -214,7 +214,16 @@ These benchmarks were obtained on a standard workstation with:
 - 10k only use `simple` data, because binary lineage data is hard to generate for so many cells
 
 ### 2) MutTracer:
-*To be added* 
+To verify that MutTracer has been successfully installed and all dependencies are functioning properly, run the demo script:
+
+```bash
+./demo/MutTracer/demo.sh
+```
+If the installation is successful:
+
+an output_test directory will be generated, and
+
+the message “MutTracer installation test SUCCESS” will appear in the terminal.
 
 
 ## 3. Usage of VAETracer
