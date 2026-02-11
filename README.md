@@ -193,12 +193,14 @@ train epoch: 100%|████████████████████�
 
 **Runtime Performance**:
 
-The following table summarizes average wall-clock execution times or speed across different data scales:
+The following table summarizes average training **speed** (epochs/sec) across different data scales:
 |   scale   |    NMF    |    VAE    | (NMF)->FT | (VAE)->FT |
 |-----------|-----------|-----------|-----------|-----------|
 |   0.1k    |           |           |           |           |
 |     1k    |           |           |           |           |
 |    10k    |           |           |           |           |
+
+*Speed = Completed Epochs / Wall-clock Time*
 
 These benchmarks were obtained on a standard workstation with:
 - OS: Ubuntu 22.04.5 LTS (x86_64)
