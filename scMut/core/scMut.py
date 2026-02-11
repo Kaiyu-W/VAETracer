@@ -151,9 +151,16 @@ def decompose_R_to_np(
             - best_p: Estimated p vector (None if not optimized)
             - losses: Training loss history
     """
+    n_size, p_size = R.shape
     if batch_size is not None:
         assert isinstance(batch_size, int) and batch_size >= 100, \
             "batch_size must be None or an integer >= 100!"
+
+        if batch_size >= n_size:
+            batch_size = None
+            if verbose:
+                logger.warning(f"Batch_size ({batch_size}) >= number of samples ({n_size}). Using full-batch training.")
+
     if max_epoch is None:
         assert not use_tqdm, 'Set max_epoch if use_tqdm=True!'
     if use_tqdm and verbose:
@@ -170,16 +177,9 @@ def decompose_R_to_np(
             R = _input_tensor(R, dtype=dtype, device=device)
     else:
         R = _input_tensor(R, dtype=dtype, device=cpu)
-    n_size, p_size = R.shape
+
     mask = R != miss_value  # Mask out invalid values
     assert mask.sum()>0
-
-    # check where to use batch
-    if batch_size is not None:
-        if batch_size >= n_size:
-            batch_size = None
-            if verbose:
-                logger.warning(f"Batch_size ({batch_size}) >= number of samples ({n_size}). Using full-batch training.")
 
     # Initialize n_logit and p_logit
     trainable_params = []
