@@ -321,29 +321,6 @@ def main(args):
         args=args
     )  
 
-    for predict_time in args.predict_times:  
-        try:
-            if isinstance(model, dict):
-                decoder_n = model['model_n'].model.decoder_n
-            elif hasattr(model, 'model') and hasattr(model.model, 'decoder_n'):
-                decoder_n = model.model.decoder_n
-            elif hasattr(model, 'decoder_n'):
-                decoder_n = model.decoder_n
-            r2, wd = plot_distribution_comparison(
-                original_z_real_dict,
-                pred_from_zt,  
-                decoder_n,
-                predict_time=predict_time,
-                args=args
-            )
-
-            if not hasattr(results, 'comparison_metrics'):
-                results.comparison_metrics = {}
-            results.comparison_metrics[predict_time] = {'R2': r2, 'WD': wd}
-        
-        except ValueError as e:
-            print(f"{predict_time}: {str(e)}") 
-
     aligned_preds = align_zxt_features(
         pred_dict=pred_from_zxt, 
         ref_dict=original_zxt_dict,
