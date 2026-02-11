@@ -85,12 +85,14 @@ try:
     from .export import (
         save_model_to_adata,
         save_model_to_pickle,
+        load_model_from_pickle,
         extract_latent_mu
     )
 
     __all__.extend([
         'save_model_to_adata',
         'save_model_to_pickle',
+        'load_model_from_pickle',
         'extract_latent_mu'
     ])
     
