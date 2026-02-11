@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+VERSION="0.0.1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREPROCESS_DIR="$SCRIPT_DIR/preprocess"
 SUBCMDS=(
@@ -31,6 +32,8 @@ print_main_help() {
 Usage: $script_name <subcommand> [options]
 
 High-level wrapper for single-cell preprocessing pipelines.
+
+Version: $VERSION
 
 Available subcommands:
 EOF
@@ -98,6 +101,11 @@ Note:
 EOF
 }
 
+print_version() {
+    local script_name=$(basename "${BASH_SOURCE[0]}")
+    echo "$script_name v$VERSION"
+}
+
 if [[ $# -eq 0 ]]; then
     print_main_help
     exit 0
@@ -107,6 +115,11 @@ FIRST_ARG="$1"
 
 if [[ "$FIRST_ARG" == "--help" || "$FIRST_ARG" == "-h" ]]; then
     print_main_help
+    exit 0
+fi
+
+if [[ "$FIRST_ARG" == "--version" || "$FIRST_ARG" == "-v" ]]; then
+    print_version
     exit 0
 fi
 
