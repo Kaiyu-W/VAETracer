@@ -257,9 +257,10 @@ def run_once(
     seed: int = 42,
     save_dir: Optional[str] = None,
     verbose: bool = True,
+    cpu_time: bool = True,
     real_n: Optional[np.ndarray] = None,
     real_p: Optional[np.ndarray] = None,
-    vae_type: Literal["mode1", "mode2"] = 'mode1'
+    vae_type: Literal["mode1", "mode2"] = 'mode1',
 ) -> Tuple[
     MutModel,
     Dict[str, List[float]],
@@ -293,6 +294,7 @@ def run_once(
         seed: Random seed for reproducibility.
         save_dir: Directory to save figures and logs.
         verbose: Print progress messages.
+        cpu_time: Output Cpu's time rather than real time.
         real_n: Ground truth generation counts (for comparison).
         real_p: Ground truth mutation rates (for comparison).
         vae_type: Training sequence for VAE ('mode1' or 'mode2').
@@ -390,7 +392,7 @@ def run_once(
     model._ft = False
     loss_dict = defaultdict()
 
-    _time_start = process_time()
+    _time_start = process_time() if cpu_time else time()
     n_dict, p_dict, xz_dict = {'real': real_n}, {'real': real_p}, {'x': X}
 
     def _nmf():
@@ -509,7 +511,7 @@ def run_once(
             _vae(vae_type)
 
     # time
-    _time_end = process_time()
+    _time_end = process_time() if cpu_time else time()
     _seconds = _time_end - _time_start
     if verbose:
         _m, _s = divmod(_seconds, 60)
@@ -558,6 +560,7 @@ def run_pipe(
     ratio2: float = 0.5,
     survival_rate: float = 0.6,
     noise_level: float = 0.1,
+    return_model: bool = False,
     **pipe_kwargs # changes about how to run model
 ) -> Dict:
     """
@@ -581,6 +584,7 @@ def run_pipe(
         ratio2: Proportion of sites from second component in bimodal prior.
         survival_rate: Cell division probability after early generations.
         noise_level: Fraction of observations to mask.
+        return_model: Whether to save model into pickle files (Default False).
         **pipe_kwargs: Additional arguments passed to run_once().
 
     Returns:
@@ -645,13 +649,7 @@ def run_pipe(
             vae_type=vae_type,
             **kwargs
         )
-
-        # clear model for space
-        model.to_cpu()
-        del model
-
-        # Return the combined results
-        return {
+        combined_results = {
             'data': [M_sample, M_mask],      # Simulated data
             'loss_dict': loss_dict,          # Training losses
             'run_seconds': run_seconds,      # Execution cpu time
@@ -660,6 +658,16 @@ def run_pipe(
             'xz_dict': xz_dict,              # Placeholder for future use
             'stat_dict': stat_dict           # Statistical comparisons
         }
+
+        # clear model for space
+        model.to_cpu()
+        if return_model:
+            combined_results['model'] = model
+        else:
+            del model
+
+        # Return the combined results
+        return combined_results
 
     def _run_lineage(beta_pair, seed, run_model_method, save_dir, **kwargs):
         # Simulate lineage data
@@ -688,13 +696,7 @@ def run_pipe(
             vae_type=vae_type,
             **kwargs
         )
-
-        # clear model for space
-        model.to_cpu()
-        del model
-
-        # Return the combined results
-        return {
+        combined_results = {
             'data': [M_sample, M_mask, M_newick, M_id],      # Simulated data
             'loss_dict': loss_dict,                          # Training losses
             'run_seconds': run_seconds,                      # Execution cpu time
@@ -703,6 +705,16 @@ def run_pipe(
             'xz_dict': xz_dict,                              # Placeholder for future use
             'stat_dict': stat_dict,                          # Statistical comparisons
         }
+
+        # clear model for space
+        model.to_cpu()
+        if return_model:
+            combined_results['model'] = model
+        else:
+            del model
+
+        # Return the combined results
+        return combined_results
 
     try:
         # Run simple data experiments
