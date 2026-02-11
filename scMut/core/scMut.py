@@ -174,6 +174,13 @@ def decompose_R_to_np(
     mask = R != miss_value  # Mask out invalid values
     assert mask.sum()>0
 
+    # check where to use batch
+    if batch_size is not None:
+        if batch_size >= n_size:
+            batch_size = None
+            if verbose:
+                logger.warning(f"Batch_size ({batch_size}) >= number of samples ({n_size}). Using full-batch training.")
+
     # Initialize n_logit and p_logit
     trainable_params = []
     if n is not None:
@@ -1860,6 +1867,7 @@ class MutModel(AutoEncoderModel):
         logging_interval: int = 100,
         use_tqdm: bool = True,
         verbose: bool = True,
+        use_batch: bool = True,
     ) -> List[float]:
         """
         Refine estimated mutation rates (P) using fixed N.
@@ -1878,6 +1886,7 @@ class MutModel(AutoEncoderModel):
             logging_interval: Logging frequency.
             use_tqdm: Show progress bar.
             verbose: Print logs.
+            use_batch: Use mini-batch training.
 
         Returns:
             Training loss history.
@@ -1916,7 +1925,8 @@ class MutModel(AutoEncoderModel):
             R=self.X, n=n, p=p, only_train_p=True, miss_value=self.miss_value, 
             lr=lr, patience=patience, min_delta=min_delta, eps=self._eps, 
             max_epoch=max_epoch, logging_interval=logging_interval, verbose=verbose,
-            device=self.device, dtype=self.dtype, use_tqdm=use_tqdm
+            device=self.device, dtype=self.dtype, use_tqdm=use_tqdm,
+            batch_size=self.batch_size if use_batch else None, seed=self.seed,
         )
 
         self.P_ft = fine_p
