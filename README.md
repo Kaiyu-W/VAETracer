@@ -123,7 +123,7 @@ test.run_pipe(
     beta_pairs=[(1, 32, None, None)],
     model_params=dict(num_epochs=1000, num_epochs_nmf=1000, lr=1e-3, beta_kl=0.001, beta_best=0.001),
     train_params=dict(patience=45),
-    load_params=dict(batch_size=5000, num_workers=0),
+    load_params=dict(batch_size=1000, num_workers=0),
     cpu_time=False
 )
 EOF
@@ -208,7 +208,7 @@ These benchmarks were obtained on a standard workstation with:
 - GPU: NVIDIA GeForce GTX 1080 Ti (11,264 MiB GDDR5X)
   - Driver Version: 550.144.03
   - CUDA Version: 12.4
-- Conditions: up to 1000 training epochs, 1000 minibatch size, 3 random repeats per configuration
+- Conditions: up to 1000 training epochs, minibatch size of 1000, 3 random repeats per configuration
 - 10k only use `simple` data, because binary lineage data is hard to generate for so many cells
 
 ### 2) MutTracer:
