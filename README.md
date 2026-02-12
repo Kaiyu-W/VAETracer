@@ -194,24 +194,22 @@ train epoch: 100%|████████████████████�
 **Runtime Performance**:
 
 The following table summarizes average training **speed** (epochs/sec) across different data scales:
-|   scale   |    NMF    |    VAE    | (NMF)->FT | (VAE)->FT |
-|-----------|-----------|-----------|-----------|-----------|
-|   0.1k    |           |           |           |           |
-|     1k    |           |           |           |           |
-|    10k    |           |           |           |           |
-
-*Speed = Completed Epochs / Wall-clock Time*
-
-These benchmarks were obtained on a standard workstation with:
-- OS: Ubuntu 22.04.5 LTS (x86_64)
-- CPU: Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
-  - Enabled: 8 physical cores, 16 logical threads (Hyper-Threading)
-- Memory: 128 GB DDR4 RAM
-- GPU: NVIDIA GeForce GTX 1080 Ti (11,264 MiB GDDR5X)
-  - Driver Version: 550.144.03
-  - CUDA Version: 12.4
-- Conditions: up to 1000 training epochs, minibatch size of 1000, 3 random repeats per configuration
-- 10k only use `simple` data, because binary lineage data is hard to generate for so many cells
+| scale   | NMF             | (NMF)->FT       | VAE-np          | (VAE-np)->FT    | VAE-xhat        |
+|:-------:|:---------------:|:---------------:|:---------------:|:---------------:|:---------------:|
+| 0.1k    | 133.47±4.98     | 158.76±3.60     | 107.86±9.51     | 156.95±5.05     | 246.59±14.19    |
+| 1k      | 44.06±2.37      | 51.02±2.94      | 61.79±12.62     | 167.04±16.54    | 97.21±1.78      |
+| 10k     | 1.72±0.03       | 1.79±0.03       | 1.61±0.02       | 1.91±0.02       | 2.55±0.24       |
+> Speed = Completed Epochs / Wall-clock Time\*
+> Values are mean ± standard deviation (n=6 replicates).  
+> Conditions: up to 1000 training epochs, minibatch size of 1000, 3 random repeats per configuration (`simple` and `lineage`)
+> Benchmarks were obtained on a standard workstation with:  
+> - OS: Ubuntu 22.04.5 LTS (x86_64)  
+> - CPU: Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz  
+>   - Enabled: 8 physical cores, 16 logical threads (Hyper-Threading)  
+> - Memory: 128 GB DDR4 RAM  
+> - GPU: NVIDIA GeForce GTX 1080 Ti (11,264 MiB GDDR5X)  
+>   - Driver Version: 550.144.03  
+>   - CUDA Version: 12.4  
 
 ### 2) MutTracer:
 To verify that MutTracer has been successfully installed and all dependencies are functioning properly, run the demo script:
