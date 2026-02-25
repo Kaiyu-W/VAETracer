@@ -312,17 +312,18 @@ def load_model_and_data(model_path, zt_path, zxt_path):
     benchmarking.
     """
     with open(model_path, 'rb') as f:
-        model_dict = pickle.load(f)
+        model = pickle.load(f)
     
-    for key in model_dict:
-        if hasattr(model_dict[key], 'eval'):
-            model_dict[key].eval()
+    if hasattr(model, 'eval'):
+        model.eval()
+    
     original_z_real_dict = torch.load(zt_path)
-    original_zxt_dict = torch.load(zxt_path)    
+    original_zxt_dict = torch.load(zxt_path)
+    
     original_z_real_dict = dict(sorted(original_z_real_dict.items()))
     original_zxt_dict = dict(sorted(original_zxt_dict.items()))
     
-    return model_dict, original_z_real_dict, original_zxt_dict
+    return model, original_z_real_dict, original_zxt_dict
 
 
 def save_results(results, args, epochs, input_time_points, predict_time_points, filename='training_results.pkl'):

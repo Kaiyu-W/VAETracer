@@ -707,30 +707,6 @@ def _extract_z_and_n(real_dict, decoder_n, times_keep):
         torch.cat(z_list).cpu().numpy(),
         torch.cat(n_list).cpu().numpy(),
         np.array(times))
-    
-
-def load_model_and_data(model_path, zt_path, zxt_path):
-
-    with open(model_path, 'rb') as f:
-        model_dict = pickle.load(f)
-    
-    if isinstance(model_dict, dict):
-        # 如果是字典，遍历字典中的模型
-        for key in model_dict:
-            if hasattr(model_dict[key], 'eval'):
-                model_dict[key].eval()
-    else:
-        # 如果不是字典，直接是模型对象
-        if hasattr(model_dict, 'eval'):
-            model_dict.eval()
-    
-    original_z_real_dict = torch.load(zt_path)
-    original_zxt_dict = torch.load(zxt_path)
-    
-    original_z_real_dict = dict(sorted(original_z_real_dict.items()))
-    original_zxt_dict = dict(sorted(original_zxt_dict.items()))
-    
-    return model_dict, original_z_real_dict, original_zxt_dict
 
 
 def split_prediction(pred_dict, zt_dim, zxt_dim):
@@ -757,11 +733,8 @@ def analyze_n_distribution(
     real_times_keep=[1,2,3], pred_times_keep=None,
     args=None
 ):
- 
-    if isinstance(model, dict):
-        decoder_n = model['model_n'].model.decoder_n
-    else:
-        decoder_n = model.model.decoder_n
+
+    decoder_n = model.model.decoder_n
     
     _plot_real_n_umap(
         decoder_n, original_z_real_dict, 
@@ -1003,9 +976,12 @@ def plot_training_loss(system, args, filename="full_loss"):
     plt.close()
 
 
-def plot_benchmark1(results):
+def plot_benchmark1(results, args):
+    plot_dir = os.path.join(args.save_dir, "training_plots")
+    os.makedirs(plot_dir, exist_ok=True)
+    output_path = os.path.join(plot_dir, f"benchmark1.{args.plot_format}")
     plt.bar(results.keys(), results.values())
     plt.title("Model Comparison")
     plt.tight_layout()
-    plt.savefig(f"training_plots/benchmark1.png")  
+    plt.savefig(output_path, dpi=300)
     plt.close()

@@ -114,11 +114,6 @@ def main(args):
         args.zmt_path,
         args.zxt_path
     )
-    original_z_real_dict = torch.load(args.zmt_path)  
-    original_zxt_dict = torch.load(args.zxt_path)  
-
-    original_z_real_dict = dict(sorted(original_z_real_dict.items()))
-    original_z_real_dict = dict(sorted(original_z_real_dict.items()))
     
     z_real_dict = {k: v for k, v in original_z_real_dict.items() if k in input_time_points}
     zxt_dict = {k: v for k, v in original_zxt_dict.items() if k in input_time_points}
@@ -142,7 +137,7 @@ def main(args):
     benchmark = Benchmark(device, zt_dim, zxt_dim)
     
     baseline_results = benchmark.evaluate(aligned_z_real_dict, aligned_zxt_dict)
-    plot_benchmark1(baseline_results)
+    plot_benchmark1(baseline_results, args)
     
     train_loader = create_data_loader(zt_train, zxt_train, batch_size=32, seq_length=3)
     test_loader = create_data_loader(zt_test, zxt_test, batch_size=32, seq_length=3)
@@ -338,7 +333,7 @@ def main(args):
         split_preds=aligned_preds, 
         real_times_keep=args.real_times_keep,  
         pred_times_keep=args.pred_times_keep,   
-        output_dir="training_plots",
+        output_dir=os.path.join(args.save_dir, "training_plots"),
         plot_format="pdf",
         ancestor_time=ancestor_time
     )
