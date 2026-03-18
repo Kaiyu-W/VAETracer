@@ -102,7 +102,7 @@ TASK_THREADS=9
 WAIT_FOR_DATA=0
 
 TEMP=$(getopt \
-  -o i:o:f:r:t:T:wh \
+  -o i:o:f:r:a:g:t:T:wh \
   -l SAMPLE_LIST:,OUTPUT_DIR:,FASTQ_DIR:,REF_DIR:,THREADS:,TASK_THREADS:,WAIT_FOR_DATA,help \
   -l CELLRANGER:,REF_FASTA:,REF_GTF:,CELLRANGER_OPTIONS: \
   -- "$@")
