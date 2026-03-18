@@ -160,7 +160,7 @@ if [ ! -d "$REF_DIR" ] || [ -z "$(ls -A "$REF_DIR")" ]; then
     cd $REF_DIR/..
     
     [ -d "$REF_DIR_NAME" ] && rmdir "$REF_DIR_NAME" # dir shouldn't exist for cellranger mkref
-    cellranger mkref \
+    $CELLRANGER mkref \
         --genome="$REF_DIR_NAME" \
         --fasta="$REF_FASTA_TMP" \
         --genes="$REF_GTF_TMP" \
