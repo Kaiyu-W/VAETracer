@@ -298,7 +298,7 @@ for sample in $SAMPLE_LIST; do
                         (( wait_seconds > time_limits )) && echoError "Timeout waiting for ${sample}.erc.g.vcf after 24 hours."
                     done
 
-                    echoStep "Got HaplotypeCaller output." star
+                    echoStep "Got HaplotypeCaller output." gatk
                     run_gatk_hap=false
                 else
                     echoStep "Detected incomplete ${sample}_gatk/${sample}.erc.g.vcf. Re-run GATK for ${sample}." gatk
