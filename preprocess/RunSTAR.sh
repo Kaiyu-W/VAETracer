@@ -97,10 +97,16 @@ Options:
   --WAIT_FOR_DATA,-w          [optional] Wait for input files to be stable before running.
   --CLEAN,-c                  [optional] Clean the temporary result files.
   --USE_FASTQ <string>        [optional] Set input fastq file(s), can be set as 'R2', 'R1' or 'R1_R2' (default R2)
+  --FASTQ_STREAM,-s           [optional] Treat input FASTQ as a streaming source, and skip file existence and stability checks
   --STAR[=<path>]             [optional] Set STAR executable path/alias. (default: STAR)
   --STAR_OPTIONS[=<string>]   [optional] Set other STAR options.
   --SAMTOOLS[=<path>]         [optional] Set SAMTOOLS executable path/alias. (default: samtools)
   --help, -h                  Show this help message
+
+By default, each FASTQ must be a single gzipped file 
+    named as '\${sample}_S1_L001_R[12]_001.fastq.gz'.
+When using --FASTQ_STREAM (-s), each FASTQ must be an uncompressed text file 
+    with the same name pattern (e.g., '.fastq' instead of '.fastq.gz').
 EOF
 }
 
@@ -118,13 +124,14 @@ TASK_THREADS=9
 WAIT_FOR_DATA=0
 CLEAN=0
 USE_FASTQ=R2
+FASTQ_STREAM=0
 
 
 TEMP=$(getopt \
--o i:o:f:r:a:g:t:T:wch \
+-o i:o:f:r:a:g:t:T:wcsh \
 -l SAMPLE_LIST:,OUTPUT_DIR:,FASTQ_DIR:,REF_DIR:,REF_FASTA:,REF_GTF:,THREADS:,TASK_THREADS:,WAIT_FOR_DATA,CLEAN,help \
 -l STAR:,SAMTOOLS:,STAR_OPTIONS: \
--l USE_FASTQ: \
+-l USE_FASTQ:,FASTQ_STREAM \
 -- "$@")
 [ $? -ne 0 ] && { echo "Error in command line arguments" >&2; exit 1; }
 eval set -- "$TEMP"
@@ -144,6 +151,7 @@ while true; do
         --WAIT_FOR_DATA | -w ) WAIT_FOR_DATA=1; shift ;;
         --CLEAN | -c ) CLEAN=1; shift ;;
         --USE_FASTQ ) USE_FASTQ="$2"; shift 2 ;; 
+        --FASTQ_STREAM | -s ) FASTQ_STREAM=1; shift ;;
         --help | -h ) Help; exit 0 ;;
         -- ) shift; break ;;
         * ) Help; exit 1 ;;
@@ -245,24 +253,36 @@ for sample in $SAMPLE_LIST; do
             echoStep "${sample}: check fastqs..." star
             fq1="$FASTQ_DIR/${sample}_S1_L001_R1_001.fastq.gz"
             fq2="$FASTQ_DIR/${sample}_S1_L001_R2_001.fastq.gz"
+            if [[ $FASTQ_STREAM -eq 1 ]]; then
+                fq1=${fq1%.gz}
+                fq2=${fq2%.gz}
+            else
+                STAR_OPTIONS="--readFilesCommand gunzip -c $STAR_OPTIONS"
+            fi
             [ $USE_FASTQ == R1 ] && input_fq=$fq1
             [ $USE_FASTQ == R2 ] && input_fq=$fq2
             [ $USE_FASTQ == R1_R2 ] && input_fq="$fq1 $fq2"
-            {
-                if [[ $WAIT_FOR_DATA -eq 1 ]]; then
-                    for fq in $input_fq; do
-                        echoStep "Waiting for $fq to be stable..." star
-                        until check_file_stable "$fq"; do
-                            echoStep "Still waiting for $fq to be stable..." star >&2
-                        done
-                        echoStep "Got stable $fq." star
-                    done
-                fi
+            if [[ $FASTQ_STREAM -eq 1 ]]; then
                 for fq in $input_fq; do
-                    [[ -s "$fq" ]] || echoError "FASTQ file $fq not found! "
+                    [[ -e "$fq" ]] || echoError "FASTQ path $fq not found! "
                 done
-            } &>> $log_out
-            echoStep "${sample}: check fastqs over" star
+            else
+                {
+                    if [[ $WAIT_FOR_DATA -eq 1 ]]; then
+                        for fq in $input_fq; do
+                            echoStep "Waiting for $fq to be stable..." star
+                            until check_file_stable "$fq"; do
+                                echoStep "Still waiting for $fq to be stable..." star >&2
+                            done
+                            echoStep "Got stable $fq." star
+                        done
+                    fi
+                    for fq in $input_fq; do
+                        [[ -s "$fq" ]] || echoError "FASTQ file $fq not found! "
+                    done
+                } &>> $log_out
+                echoStep "${sample}: check fastqs over" star
+            fi
             
             [ -d "${sample}_star" ] || mkdir -p "${sample}_star"; cd "${sample}_star"
             echoStep "${sample}: STAR will output in $OUTPUT_DIR/${sample}_star/" star
@@ -273,7 +293,6 @@ for sample in $SAMPLE_LIST; do
                 --genomeDir "$REF_DIR" \
                 --readFilesIn "$input_fq" \
                 --outFileNamePrefix "${sample}" \
-                --readFilesCommand "gunzip -c" \
                 --outSAMtype BAM Unsorted \
                 --quantMode GeneCounts $STAR_OPTIONS &>> $log_out
                 # default: only process R2, since R1 is CB-UMI which has no info

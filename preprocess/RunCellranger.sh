@@ -75,6 +75,8 @@ Options:
   --THREADS,-t <int>          [optional] Set total cpu cores (default: $(nproc))
   --TASK_THREADS,-T <int>     [optional] Set single task cores (default: 9)
   --WAIT_FOR_DATA,-w          [optional] Wait for input files to stabilize before running.
+  --SKIP_CHECK_FASTQ,-s       [optional] Skip to check R1/R2 FASTQ.
+  --DATA_FROM_BAM,-b          [optional] FASTQs are generated from BAM by bamtofastq.
   --CELLRANGER[=<path>]       [optional] Set CELLRANGER executable path/alias. (default: cellranger)
   --CELLRANGER_OPTIONS[=<string>]
                               [optional] Set other CELLRANGER options.
@@ -100,11 +102,14 @@ OUTPUT_DIR=""
 THREADS=$(nproc)
 TASK_THREADS=9
 WAIT_FOR_DATA=0
+SKIP_CHECK_FASTQ=0
+DATA_FROM_BAM=0
 
 TEMP=$(getopt \
-  -o i:o:f:r:a:g:t:T:wh \
+  -o i:o:f:r:a:g:t:T:wsbh \
   -l SAMPLE_LIST:,OUTPUT_DIR:,FASTQ_DIR:,REF_DIR:,THREADS:,TASK_THREADS:,WAIT_FOR_DATA,help \
   -l CELLRANGER:,REF_FASTA:,REF_GTF:,CELLRANGER_OPTIONS: \
+  -l SKIP_CHECK_FASTQ,DATA_FROM_BAM \
   -- "$@")
 [ $? -ne 0 ] && { echo "Error in command line arguments" >&2; exit 1; }
 eval set -- "$TEMP"
@@ -121,6 +126,8 @@ while true; do
         --THREADS | -t ) THREADS="$2"; shift 2 ;;
         --TASK_THREADS | -T ) TASK_THREADS="$2"; shift 2 ;;
         --WAIT_FOR_DATA | -w ) WAIT_FOR_DATA=1; shift ;;
+        --SKIP_CHECK_FASTQ | -s ) SKIP_CHECK_FASTQ=1; shift ;;
+        --DATA_FROM_BAM | -b ) DATA_FROM_BAM=1; shift ;;
         --help | -h ) Help; exit 0 ;;
         -- ) shift; break ;;
         * ) Help; exit 1 ;;
@@ -185,27 +192,37 @@ for sample in $SAMPLE_LIST; do
     (
         echoStep "Running cellranger for $sample" cellranger
         {
-            fq1="$FASTQ_DIR/${sample}_S1_L001_R1_001.fastq.gz"
-            fq2="$FASTQ_DIR/${sample}_S1_L001_R2_001.fastq.gz"
-            if [[ $WAIT_FOR_DATA -eq 1 ]]; then
-                for fq in "$fq1" "$fq2"; do
-                    echoStep "Waiting for $fq to be stable..." cellranger
-                    until check_file_stable "$fq"; do
-                        echoStep "Still waiting for $fq to be stable..." cellranger >&2
+            if [[ $SKIP_CHECK_FASTQ -eq 0 && $DATA_FROM_BAM -eq 0 ]]; then
+                fq1="$FASTQ_DIR/${sample}_S1_L001_R1_001.fastq.gz"
+                fq2="$FASTQ_DIR/${sample}_S1_L001_R2_001.fastq.gz"
+                if [[ $WAIT_FOR_DATA -eq 1 ]]; then
+                    for fq in "$fq1" "$fq2"; do
+                        echoStep "Waiting for $fq to be stable..." cellranger
+                        until check_file_stable "$fq"; do
+                            echoStep "Still waiting for $fq to be stable..." cellranger >&2
+                        done
+                        echoStep "Got stable $fq." cellranger
                     done
-                    echoStep "Got stable $fq." cellranger
+                fi
+                for fq in "$fq1" "$fq2"; do
+                    [ -s "$fq" ] || echoError "FASTQ file $fq not found! "
                 done
             fi
-            for fq in "$fq1" "$fq2"; do
-                [ -s "$fq" ] || echoError "FASTQ file $fq not found! "
-            done
 
-            $CELLRANGER count \
-                --id="$sample" \
-                --transcriptome="$REF_DIR" \
-                --fastqs="$FASTQ_DIR" \
-                --sample="$sample" \
-                --localcores="$TASK_THREADS" $CELLRANGER_OPTIONS
+            if [[ $DATA_FROM_BAM -eq 0 ]]; then
+                $CELLRANGER count \
+                    --id="$sample" \
+                    --transcriptome="$REF_DIR" \
+                    --fastqs="$FASTQ_DIR" \
+                    --sample="$sample" \
+                    --localcores="$TASK_THREADS" $CELLRANGER_OPTIONS
+            else
+                $CELLRANGER count \
+                    --id="$sample" \
+                    --transcriptome="$REF_DIR" \
+                    --fastqs="$FASTQ_DIR" \
+                    --localcores="$TASK_THREADS" $CELLRANGER_OPTIONS
+            fi
         } 1> "${sample}.count.log"
 
         echoStep "$sample over" cellranger
