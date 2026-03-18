@@ -208,7 +208,7 @@ if [ ! -d "$REF_DIR" ] || [ -z "$(ls -A "$REF_DIR")" ]; then
          --genomeDir $REF_DIR \
          --runThreadN $THREADS \
          --genomeFastaFiles "$REF_FASTA_TMP" \
-         --sjdbGTFfile "$REF_GTF_TMP" 1> "${REF_DIR}.STAR_genomeGenerate.log" || exit 1
+         --sjdbGTFfile "$REF_GTF_TMP" &> "${REF_DIR}.STAR_genomeGenerate.log" || exit 1
 
     # [ -s $REF_FASTA_TMP ] && rm $REF_FASTA_TMP
     [[ $CLEAN -eq 1 ]] && [ -s $REF_GTF_TMP ] && rm $REF_GTF_TMP
