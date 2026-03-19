@@ -28,6 +28,7 @@ Note:
 - `bash=5` is required for enhanced functionality of the `wait` command used in workflow scripts.
 - `gcc`/`gxx`: in case the system's built-in compiler is too old
 - `pigz`: parallelly gzip/gunzip
+- `samtools>=1.4` is required to use the -@ (multi-threading) option with flagstat.
 - We recommend **maintaining version consistency** across installations to avoid bugs caused by changes in command-line arguments or usage patterns.
 
 ### 2. scMut: 
