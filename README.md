@@ -12,7 +12,7 @@ For upstream data processing (FASTQ generation, alignment, variant calling), we 
 ```bash
 conda create -n sc_preprocess -c conda-forge -c bioconda \
     gcc gxx pigz 'bash=5' 'python=3.7' \
-    'samtools' \
+    'samtools>=1.4' \
     'vcftools' \
     'gatk4==4.2.3.0' \
     'star==2.7.6a' \
