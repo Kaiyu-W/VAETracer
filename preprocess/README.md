@@ -114,6 +114,11 @@ bash RunGATK.sh \
 #   - For single-sample calling, set `-m single`.
 #   - Joint mode outputs: vcf_out/merge09maf05.recode.vcf.gz
 #   - Single mode outputs: vcf_out/{sample}.merge09maf05.recode.vcf.gz
+
+# Important:
+#   - The `gatk VariantRecalibrator` step may fail if there are too few variants or insufficient annotation variance. 
+#     In such cases, users must manually adjust parameters (e.g., `--max-gaussians`, `--minimum-bad-variants`, `--standard-deviation-threshold`) 
+#     and re-run this step, as the workflow does not automatically recover from this error.
 ```
 
 ```bash
