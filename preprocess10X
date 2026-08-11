@@ -14,7 +14,7 @@ declare -A SCRIPT_MAP=(
     ["RunSTAR"]="$PREPROCESS_DIR/RunSTAR.sh"
     ["RunGATK"]="$PREPROCESS_DIR/RunGATK.sh"
     ["RunCellranger"]="$PREPROCESS_DIR/RunCellranger.sh"
-    ["SRAtoFastq"]="$PREPROCESS_DIR/SRAtoFastq"
+    ["SRAtoFastq"]="$PREPROCESS_DIR/SRAtoFastq.sh"
     ["GetAF"]="$PREPROCESS_DIR/GetAF.py"
 )
 declare -A INTERPRETER_MAP=(
