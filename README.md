@@ -5,6 +5,23 @@
 
 ![pipeline](docs/pipeline_workflow.jpg)
 
+## Table of Contents
+
+- [1. Environment Installation](#1-environment-installation)
+  - [1. preprocess](#1-preprocess)
+  - [2. scMut](#2-scmut)
+  - [3. MutTracer](#3-muttracer)
+  - [Integrated Analysis in the Paper](#integrated-analysis-in-the-paper)
+- [2. Test: Validate Installation and Module Integrity](#2-test-validate-installation-and-module-integrity)
+- [3. Usage of VAETracer](#3-usage-of-vaetracer)
+  - [1) preprocess: Data Preprocessing Pipeline](#1-preprocess-data-preprocessing-pipeline)
+  - [2) scMut: Mutation Matrix Decomposition](#2-scmut-mutation-matrix-decomposition)
+  - [3) MutTracer: Lineage-Aware Expression Dynamics Modeling](#3-muttracer-lineage-aware-expression-dynamics-modeling)
+  - [4) tree_util: Lineage tree utilities](#4-tree_util-lineage-tree-utilities)
+- [4. Docker](#4-docker)
+- [5. Notes and Recommendations](#5-notes-and-recommendations)
+- [6. Papers & Citations](#6-papers--citations)
+
 ## 1. Environment Installation
 
 ### 1. preprocess: 
