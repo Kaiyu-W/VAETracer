@@ -5,6 +5,7 @@
 
 ![pipeline](docs/pipeline_workflow.jpg)
 
+
 ## Table of Contents
 
 - [1. Environment Installation](#1-environment-installation)
@@ -21,6 +22,7 @@
 - [4. Docker](#4-docker)
 - [5. Notes and Recommendations](#5-notes-and-recommendations)
 - [6. Papers & Citations](#6-papers--citations)
+
 
 ## 1. Environment Installation
 
