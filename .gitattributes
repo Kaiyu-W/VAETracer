@@ -1,4 +1,4 @@
-*.py            linguist-language=python
-*.sh            linguist-language=shell
-*.md            linguist-language=markdown
-Dockerfile*     linguist-language=docker
+*.py linguist-language=python
+*.sh linguist-language=shell
+*.md linguist-language=markdown
+Dockerfile* linguist-language=docker
