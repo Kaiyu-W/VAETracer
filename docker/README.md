@@ -4,14 +4,14 @@
 
 | Image | Description | Min System Requirement | Python | PyTorch | CUDA |
 |-------|-------------|----------------------|--------|---------|------|
-| vaetracer/preprocess:0.0.1 | Upstream preprocessing (STAR, GATK, samtools) | CentOS 7 / glibc 2.17 | 3.7 | - | - |
-| vaetracer/scmut:0.1.0 | Mutation matrix decomposition | CentOS 7 / glibc 2.17 | 3.8 | 1.12.0 | 10.2 |
-| vaetracer/muttracer:0.1.0 | Lineage-aware expression modeling | CUDA >= 12.1 / glibc >= 2.28 | 3.11 | 2.5.1 | 12.4 |
+| vaetracer/preprocess:0.0.1 | Upstream preprocessing | CentOS 7 | 3.7 | - | - |
+| vaetracer/scmut:0.1.0 | Mutation matrix decomposition | CentOS 7 / CUDA >= 10.2 | 3.7 | 1.12.0 | 10.2 |
+| vaetracer/muttracer:0.1.0 | Lineage-aware expression modeling | CentOS 7 / CUDA >= 12.4 | 3.11 | 2.5.1 | 12.4 |
 
 ### Compatibility Notes
 
 - preprocess and scMut images are based on CentOS 7 (glibc 2.17) for maximum HPC compatibility, supporting legacy clusters with older kernels and system libraries.
-- MutTracer requires Python 3.11+, PyTorch 2.5.1, JAX with CUDA >= 12.1, and scvi-tools. These dependencies require glibc >= 2.28 and are incompatible with CentOS 7 / RHEL 7. A system such as Rocky Linux 8+, Ubuntu 20.04+, or RHEL 8+ is required. Note that while the host OS must meet this requirement, conda's sysroot mechanism allows the container to run on systems where the native glibc is older, as long as the NVIDIA driver supports CUDA >= 12.1.
+- MutTracer requires Python 3.11+, PyTorch 2.5.1, JAX with CUDA >= 12.4, and scvi-tools. These dependencies require glibc >= 2.28 and are incompatible with CentOS 7 / RHEL 7. A system such as Rocky Linux 8+, Ubuntu 20.04+, or RHEL 8+ is required. Note that while the host OS must meet this requirement, conda's sysroot mechanism allows the container to run on systems where the native glibc is older, as long as the NVIDIA driver supports CUDA >= 12.4.
 
 ## Prerequisites
 
@@ -186,5 +186,6 @@ For offline deployment to HPC clusters without Docker Hub access:
 ## Notes
 
 - scMut uses PyTorch 1.12.0 + CUDA 10.2; confirmed compatible with CentOS 7 kernel 3.10.
-- MutTracer uses PyTorch 2.5.1 + CUDA 12.4 + JAX + scvi-tools; requires host NVIDIA driver supporting CUDA >= 12.1.
+- MutTracer uses PyTorch 2.5.1 + CUDA 12.4 + JAX + scvi-tools; requires host NVIDIA driver supporting CUDA >= 12.4.
 - See main project README for full API documentation, test procedures, and citation information.
+- The Dockerfiles use Chinese mirror sources (mirrors.aliyun.com) for CentOS vault repositories to accelerate downloads within mainland China. Users outside China should remove or replace the mirror configuration in the RUN sed commands at the beginning of each Dockerfile, or substitute with a geographically appropriate mirror.
