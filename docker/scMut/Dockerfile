@@ -5,8 +5,8 @@ FROM centos:7
 # ============================================================
 RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo \
     && sed -i 's|#baseurl=http://mirror.centos.org|baseurl=https://mirrors.aliyun.com/centos-vault|g' /etc/yum.repos.d/CentOS-*.repo \
-    && yum clean all && \
-    yum makecache
+    && yum clean all \
+    && yum makecache
 
 # ============================================================
 # System dependencies (required for gcc/gxx compilation)

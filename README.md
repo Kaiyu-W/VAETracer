@@ -439,19 +439,41 @@ Provides utility functions for lineage tree processing and format interoperabili
 - Other utilities: e.g. extracts tree linkage matrix
 
 
-## 4. Notes and Recommendations
+## 4. Docker
+
+Docker configurations based on `CentOS 7` for all three components (preprocess, scMut, MutTracer) are provided in the `docker/` directory. A convenience script `docker_build.sh` is included at the project root to build images locally:
+```bash
+bash docker_build.sh
+```
+
+For detailed build instructions, environment verification commands, and usage examples, see `docker/README.md`.
+
+Pre-built Docker images are not distributed with this repository to reduce storage overhead. Users should build images locally and transfer them to `HPC clusters` as needed:
+```bash
+    # Build all images
+    bash docker_build.sh
+
+    # take preprocess image as example
+    scp vaetracer-preprocess.tar.gz user@cluster:~/
+
+    # Load on HPC cluster
+    gunzip -c ~/vaetracer-preprocess.tar.gz | docker load
+```
+
+
+## 5. Notes and Recommendations
 - Due to the complexity of deep learning dependencies (especially `PyTorch`), we recommend installing `CUDA` first using the appropriate command for your system (CPU/GPU) before installing other packages.
 
 - In theory, `PyTorch` maintains backward compatibility, so you can install a `PyTorch` version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` with `Python=3.7/3.8` works as expected. If a newer version causes incompatibilities, please downgrade accordingly. For example, using `PyTorch 1.12.0` and `Python 3.7` for `scMut` may resolve installation problems on `HPC clusters`.
 
 - `Scanpy` has specific Python version requirements, and automatically installed versions (by `conda`) often lead to dependency conflicts. The best approach is to check version compatibility and **manually** specify the appropriate version during installation (for example, `conda install 'scanpy<1.10'` for Python 3.8, `conda install 'scanpy<=1.9.3'` for Python 3.7). The same principle applies to other critical packages (such as `Cassiopeia`) as well.
 
-- The dependency versions listed here are valid as of **January 2026**. Future updates to `scvi-tools` may change its installation requirements; please refer to the official documentation for the latest guidance.
+- The dependency versions listed above are valid as of **January 2026** and docker images are created and tested in **Augest 2026**. Future updates to `scvi-tools` may change its installation requirements; please refer to the official documentation for the latest guidance.
 
 - All codes and scripts have been tested and verified on `Linux` systems (Ubuntu and Red-Hat distributions). Compatibility with other operating systems is not guaranteed.
 
 
-## 5. Papers & Citations
+## 6. Papers & Citations
 
 The following publications describe the methods and applications of VAETracer. Please cite the relevant work when using this tool in your research.
 
