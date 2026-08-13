@@ -331,7 +331,8 @@ from scMut import load_model_from_pickle # load the whole MutModel
 from scMut import extract_latent_mu      # save z_m (actually mu of z)
 
 # Run test pipeline
-from scMut.test import run_pipe
+from scMut import test
+# test.run_pipe(...)
 
 # Use help(func) in Python to view detailed documentation for each function.
 ```
@@ -441,9 +442,9 @@ Provides utility functions for lineage tree processing and format interoperabili
 ## 4. Notes and Recommendations
 - Due to the complexity of deep learning dependencies (especially `PyTorch`), we recommend installing `CUDA` first using the appropriate command for your system (CPU/GPU) before installing other packages.
 
-- In theory, `PyTorch` maintains backward compatibility, so you can install a `PyTorch` version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` works as expected. If a newer version causes incompatibilities, please downgrade accordingly.
+- In theory, `PyTorch` maintains backward compatibility, so you can install a `PyTorch` version suitable for your hardware. Here, we have confirmed that `PyTorch=1.12.0` with `Python=3.7/3.8` works as expected. If a newer version causes incompatibilities, please downgrade accordingly. For example, using `PyTorch 1.12.0` and `Python 3.7` for `scMut` may resolve installation problems on `HPC clusters`.
 
-- `Scanpy` has specific Python version requirements, and automatically installed versions (by `conda`) often lead to dependency conflicts. The best approach is to check version compatibility and **manually** specify the appropriate version during installation (for example, `conda install 'scanpy<1.10'` for Python 3.8). The same principle applies to other critical packages (such as `Cassiopeia`) as well.
+- `Scanpy` has specific Python version requirements, and automatically installed versions (by `conda`) often lead to dependency conflicts. The best approach is to check version compatibility and **manually** specify the appropriate version during installation (for example, `conda install 'scanpy<1.10'` for Python 3.8, `conda install 'scanpy<=1.9.3'` for Python 3.7). The same principle applies to other critical packages (such as `Cassiopeia`) as well.
 
 - The dependency versions listed here are valid as of **January 2026**. Future updates to `scvi-tools` may change its installation requirements; please refer to the official documentation for the latest guidance.
 
