@@ -434,7 +434,7 @@ for sample in $SAMPLE_LIST; do
                     -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 95.0 -tranche 90.0 \
                     -O "${sample}.snp.recal" \
                     --tranches-file "${sample}.snp.tranches" \
-                    --rscript-file "${sample}.snp.plots.R" &>> $log_out
+                    &>> $log_out # --rscript-file "${sample}.snp.plots.R"
                 echoStep "${sample}: gatk VariantRecalibrator over" vcf
 
                 echoStep "${sample}: gatk ApplyVQSR..." vcf
@@ -572,7 +572,7 @@ echoStep "All GATK jobs finished." gatk
             -tranche 100.0 -tranche 99.9 -tranche 99.0 -tranche 95.0 -tranche 90.0 \
             -O "$OUTPUT_VCF/snp.recal" \
             --tranches-file "$OUTPUT_VCF/snp.tranches" \
-            --rscript-file "$OUTPUT_VCF/snp.plots.R" &>> $vcf_log
+            &>> $vcf_log # --rscript-file "$OUTPUT_VCF/snp.plots.R"
         echoStep "gatk VariantRecalibrator over" vcf
 
         echoStep "gatk ApplyVQSR..." vcf
