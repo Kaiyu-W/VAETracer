@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scmut"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python package for single-cell Mutation Parser in single-cell lineage tracing."
 readme = "README.md"
 requires-python = ">=3.7"
@@ -13,7 +13,7 @@ authors = [
   { name = "Kaiyu Wang" }
 ]
 maintainers = [
-  { name = "Kaiyu Wang", email = "wangkaiyu2020@sibcb.ac.cn" }
+  { name = "Kaiyu Wang", email = "wangkaiyu201@mails.ucas.ac.cn" }
 ]
 keywords = ["single-cell", "lineage tracing", "mutation analysis", "deep-learning"]
 classifiers = [

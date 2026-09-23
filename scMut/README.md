@@ -47,12 +47,17 @@ from scMut import save_model_to_adata
 # Packages inferred N, P, Z, etc. into an AnnData object for downstream analysis (e.g., UMAP, integration).
 
 # 4. Test pipeline
-from scMut.test import run_pipe
+from scMut import test
+# test.run_pipe(...)
 
 # 5. Save model for input of MutTracer
 from scMut import extract_latent_mu      # save z_m (actually mu of z)
 from scMut import save_model_to_pickle   # save the whole MutModel
 from scMut import load_model_from_pickle # load the whole MutModel
+
+# 6. Read data from Preprocess's outputs
+from scMut import data_utils
+# data_utils.read_parquet(...)
 
 # Use help(func) in Python to view detailed documentation for each function.
 ```
